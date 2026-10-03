@@ -7,6 +7,7 @@ import { downloadNewsCard } from '../utils/downloadNewsCard';
 interface Props {
   article: LiveArticle;
   themeColor?: string;
+  customTrigger?: React.ReactNode;
 }
 
 const SOCIALS = [
@@ -83,7 +84,7 @@ const SOCIALS = [
   },
 ];
 
-export default function ShareMenu({ article, themeColor = '#00F0FF' }: Props) {
+export default function ShareMenu({ article, themeColor = '#00F0FF', customTrigger }: Props) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -125,14 +126,19 @@ export default function ShareMenu({ article, themeColor = '#00F0FF' }: Props) {
 
   return (
     <>
-      {/* Share trigger — vertical icon+label to match siblings in the grid */}
-      <button
-        onClick={handleOpen}
-        className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-bold text-[10px] md:text-xs bg-white/5 hover:bg-white/10 transition-all"
-        title="Share"
-      >
-        <Share2 size={16} /> Share
-      </button>
+      {/* Share trigger */}
+      <div onClick={handleOpen}>
+        {customTrigger ? (
+          customTrigger
+        ) : (
+          <button
+            className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-bold text-[10px] md:text-xs bg-white/5 hover:bg-white/10 transition-all w-full"
+            title="Share"
+          >
+            <Share2 size={16} /> Share
+          </button>
+        )}
+      </div>
 
       {/* Full-screen bottom sheet (mobile) / dropdown (desktop) */}
       <AnimatePresence>

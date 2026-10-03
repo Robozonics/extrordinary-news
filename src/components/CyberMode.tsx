@@ -4,7 +4,7 @@ import { fetchLiveNews, scrapeFullArticle } from '../utils/liveNews';
 import type { LiveArticle } from '../utils/liveNews';
 import { translateWithGemini, factCheckWithGemini, askGemini } from '../utils/gemini';
 import ShareMenu from './ShareMenu';
-import { Globe, Play, Pause, Bookmark, ShieldAlert, Loader2, Volume2, Search, MapPin, Maximize2, X, RefreshCw, Eye, BookOpen, Brain, Scale, Wallet, Sparkles, Mic, Settings } from 'lucide-react';
+import { Globe, Play, Pause, Bookmark, ShieldAlert, Loader2, Volume2, Search, MapPin, Maximize2, X, RefreshCw, Eye, BookOpen, Brain, Scale, Wallet, Sparkles, Mic, Settings, Share2 } from 'lucide-react';
 
 interface Props {
   view: 'feed' | 'inshorts' | 'saved' | 'factcheck';
@@ -225,7 +225,7 @@ CRITICAL RULES:
   const runFactCheck = async () => {
     if (!factCheckQuery) return;
     setIsFactChecking(true);
-    setFactCheckResult(null); // Clear previous result if any
+    setFactCheckResult(''); // Clear previous result if any
     
     try {
       // 1. Extract keywords from claim for better Google News RSS matches
@@ -387,8 +387,21 @@ CRITICAL RULES:
                   className="flex-1 bg-white/10 backdrop-blur-md border border-white/10 py-3.5 rounded-xl hover:bg-white/20 transition-all flex flex-col md:flex-row justify-center items-center gap-1 text-[11px] md:text-sm font-bold uppercase tracking-wider"
                 >
                   {isFeatureLoading === article.id + 'Meme' ? <Loader2 size={18} className="animate-spin" style={{ color: themeColor }} /> : <Sparkles size={18} style={{ color: themeColor }} />} 
-                  <span className="text-white/70">Meme</span>
+                  <span className="text-white/70 hidden sm:inline">Meme</span>
                 </button>
+
+                <div className="flex-1">
+                  <ShareMenu 
+                    article={article} 
+                    themeColor={themeColor} 
+                    customTrigger={
+                      <button className="w-full bg-white/10 backdrop-blur-md border border-white/10 py-3.5 rounded-xl hover:bg-white/20 transition-all flex flex-col md:flex-row justify-center items-center gap-1 text-[11px] md:text-sm font-bold uppercase tracking-wider">
+                        <Share2 size={18} style={{ color: themeColor }} />
+                        <span className="text-white/70 hidden sm:inline">Share</span>
+                      </button>
+                    }
+                  />
+                </div>
                 
                 <button 
                   onClick={() => loadFullStory(article)} 
@@ -598,7 +611,20 @@ CRITICAL RULES:
         <AnimatePresence>
           {fullStoryId && (
             <motion.div initial={{opacity:0, y:'100%'}} animate={{opacity:1, y:0}} exit={{opacity:0, y:'100%'}} className="fixed inset-0 z-[100] bg-[#090A0F] overflow-y-auto no-scrollbar">
-              <button onClick={() => setFullStoryId(null)} className="fixed top-4 right-4 z-50 bg-white/10 p-3 rounded-full text-white hover:bg-white/20"><X size={24} /></button>
+              <div className="fixed top-4 right-4 z-50 flex gap-2">
+                {displayArticles.find(a => a.id === fullStoryId) && (
+                  <ShareMenu 
+                    article={displayArticles.find(a => a.id === fullStoryId)!} 
+                    themeColor={themeColor}
+                    customTrigger={
+                      <button className="bg-white/10 p-3 rounded-full text-white hover:bg-white/20 flex items-center justify-center">
+                        <Share2 size={24} />
+                      </button>
+                    }
+                  />
+                )}
+                <button onClick={() => setFullStoryId(null)} className="bg-white/10 p-3 rounded-full text-white hover:bg-white/20"><X size={24} /></button>
+              </div>
                 <div className="max-w-4xl mx-auto p-4 md:p-12 text-white pb-32 mt-12">
                   <img src={displayArticles.find(a => a.id === fullStoryId)?.image} className="w-full h-80 md:h-96 object-cover rounded-3xl mb-8 shadow-2xl" alt=""/>
                   <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight">{displayArticles.find(a => a.id === fullStoryId)?.title}</h1>
