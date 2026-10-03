@@ -224,8 +224,22 @@ CRITICAL RULES:
   const runFactCheck = async () => {
     if (!factCheckQuery) return;
     setIsFactChecking(true);
+    setFactCheckResult(null); // Clear previous result if any
+    
     try {
-      const result = await factCheckWithGemini(factCheckQuery);
+      // 1. Search Google News for real-time context to prevent AI hallucination
+      const realTimeArticles = await fetchLiveNews('Search', factCheckQuery);
+      
+      let context = '';
+      if (realTimeArticles && realTimeArticles.length > 0) {
+        context = "RECENT NEWS ARTICLES FOUND ON THE WEB RELATED TO THIS CLAIM:\n" + 
+                  realTimeArticles.slice(0, 5).map(a => `Source: ${a.source}\nHeadline: ${a.title}\nSummary: ${a.summary}`).join('\n\n');
+      } else {
+        context = "No recent articles found on the web. Rely on your base knowledge.";
+      }
+
+      // 2. Pass the real-time context to the fact-checker
+      const result = await factCheckWithGemini(factCheckQuery, context);
       setFactCheckResult(result);
     } catch (e) {
       setFactCheckResult("Error: AI Servers overloaded.");

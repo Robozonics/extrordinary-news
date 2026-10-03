@@ -175,9 +175,10 @@ export async function translateWithGemini(text: string, targetLanguage: string):
   );
 }
 
-export async function factCheckWithGemini(claim: string): Promise<string> {
+export async function factCheckWithGemini(claim: string, context?: string): Promise<string> {
   const result = await askGemini(
-    `You are an elite independent fact-checker. Analyze this claim or news snippet and determine if it is True, False, Misleading, or Unverified. Provide a short 3-sentence explanation formatted entirely in clean HTML tags (like <p>, <b>). Do not use markdown blocks:\n\nCLAIM: "${claim}"`
+    `You are an elite independent fact-checker. Analyze this claim or news snippet and determine if it is True, False, Misleading, or Unverified. Provide a short 3-sentence explanation formatted entirely in clean HTML tags (like <p>, <b>). Do not use markdown blocks:\n\nCLAIM: "${claim}"`,
+    context
   );
   return result.replace(/```html/gi, '').replace(/```/g, '').trim();
 }
