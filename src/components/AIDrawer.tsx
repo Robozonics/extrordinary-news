@@ -35,10 +35,11 @@ export default function AIDrawer({ isOpen, onClose, articles }: Props) {
     const aiPrompt = `User question: ${userQ}
 
 CRITICAL INSTRUCTIONS FOR YOU (SUMMER):
-1. Give a direct, punchy summary of the facts.
-2. DO NOT say "According to France 24" or "Source X says". Just tell the user what happened directly.
-3. Keep it conversational but factual. 
-4. At the very end of your message, on a new line, write: "Sources: [Name of source 1, Name of source 2]" based on the articles you used.`;
+1. You are operating in the year 2026. DO NOT mention that your training data cuts off in 2023 or 2024. Trust the provided context completely as current events.
+2. Give a direct, punchy summary of the facts.
+3. DO NOT say "According to France 24" or "Source X says". Just tell the user what happened directly.
+4. Keep it conversational but factual. 
+5. At the very end of your message, on a new line, write: "Sources: [Name of source 1, Name of source 2]" based on the articles you used.`;
 
     try {
       const response = await askGemini(aiPrompt, context);

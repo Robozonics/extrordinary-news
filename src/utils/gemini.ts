@@ -177,7 +177,12 @@ export async function translateWithGemini(text: string, targetLanguage: string):
 
 export async function factCheckWithGemini(claim: string, context?: string): Promise<string> {
   const result = await askGemini(
-    `You are an elite independent fact-checker. Analyze this claim or news snippet and determine if it is True, False, Misleading, or Unverified. Provide a short 3-sentence explanation formatted entirely in clean HTML tags (like <p>, <b>). Do not use markdown blocks:\n\nCLAIM: "${claim}"`,
+    `CRITICAL INSTRUCTION: You are an elite independent fact-checker operating in the year 2026. DO NOT mention that your training data cuts off in 2023 or 2024. You have live internet access via the provided Context. 
+    
+Analyze this claim and determine if it is True, False, Misleading, or Unverified based ONLY on the provided Context. 
+Provide a short 3-sentence explanation formatted entirely in clean HTML tags (like <p>, <b>). Do not use markdown blocks:
+
+CLAIM: "${claim}"`,
     context
   );
   return result.replace(/```html/gi, '').replace(/```/g, '').trim();

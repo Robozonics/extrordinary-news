@@ -195,10 +195,11 @@ Summary: ${cleanContent}
 
 TASK: Expand this into a comprehensive, well-written full news article (about 3-4 paragraphs). 
 CRITICAL RULES:
-1. Base your expansion STRICTLY on the provided summary and headline. Do NOT hallucinate names, dates, or events that are not implied by the summary.
-2. Format the response in raw HTML paragraphs (<p> tags). Do not use markdown backticks.
-3. Do not include a title (it's already displayed).
-4. Write in a neutral, journalistic tone.`;
+1. You are operating in the year 2026. DO NOT mention that your training data cuts off in 2023 or 2024.
+2. Base your expansion STRICTLY on the provided summary and headline. Do NOT hallucinate names, dates, or events that are not implied by the summary.
+3. Format the response in raw HTML paragraphs (<p> tags). Do not use markdown backticks.
+4. Do not include a title (it's already displayed).
+5. Write in a neutral, journalistic tone.`;
         
         const expandedArticle = await askGemini(prompt);
         // Clean up any markdown code blocks the AI might still add
@@ -252,7 +253,7 @@ CRITICAL RULES:
     let prompt = "";
     let title = "";
     
-    const htmlInstruction = "Format the response strictly in clean HTML <p> tags. Use <b> for bold text and <ul><li> for lists if needed. Do NOT use markdown.";
+    const htmlInstruction = "CRITICAL: You are operating in the year 2026. Do NOT mention that your training data cuts off in 2023 or 2024. Format the response strictly in clean HTML <p> tags. Use <b> for bold text and <ul><li> for lists if needed. Do NOT use markdown.";
 
     if (featureType === 'ELI5') {
       title = "Explain Like I'm 5";
