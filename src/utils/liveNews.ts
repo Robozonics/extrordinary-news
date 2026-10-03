@@ -3,8 +3,6 @@ import { askGemini } from './gemini';
 // ---------------------------------------------------------------------------
 // RSS Sources
 // ---------------------------------------------------------------------------
-
-// Per-category feeds (used for World, America, Europe, etc.)
 const CATEGORY_FEEDS: Record<string, string[]> = {
   World: [
     'http://feeds.bbci.co.uk/news/world/rss.xml',
@@ -36,7 +34,6 @@ const CATEGORY_FEEDS: Record<string, string[]> = {
   ],
 };
 
-// Broad set of feeds — fetched for AI-curated categories (Leaders, Blind Spot, Search, Local)
 const BROAD_FEEDS = [
   'http://feeds.bbci.co.uk/news/world/rss.xml',
   'https://www.aljazeera.com/xml/rss/all.xml',
@@ -55,7 +52,6 @@ const BROAD_FEEDS = [
   'https://www.theguardian.com/us-news/rss',
 ];
 
-// Keywords for client-side pre-filtering (avoids AI for Leaders category)
 const LEADER_KEYWORDS = [
   'president', 'prime minister', 'chancellor', 'minister', 'senator',
   'secretary of state', 'summit', 'g7', 'g20', 'nato', 'un ', 'diplomat',
@@ -91,7 +87,9 @@ function isRecent(pubDate: string): boolean {
   return isNaN(t) || Date.now() - t <= ONE_WEEK_MS;
 }
 
-/** Fetch one RSS feed. Returns [] on timeout / error. */
+// ---------------------------------------------------------------------------
+// Core RSS fetcher (single feed via rss2json proxy)
+// ---------------------------------------------------------------------------
 async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<LiveArticle[]> {
   try {
     const ctrl = new AbortController();
@@ -125,7 +123,35 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<Live
   }
 }
 
-/** Fetch many feeds in parallel, deduplicate by title, keep last-7-days only */
+// ---------------------------------------------------------------------------
+// Google News RSS Search — the KEY to getting REAL current results for any query.
+// URL format: https://news.google.com/rss/search?q=QUERY&hl=en&gl=US&ceid=US:en
+// This is a free, public RSS feed — no API key needed.
+// ---------------------------------------------------------------------------
+async function searchGoogleNews(query: string): Promise<LiveArticle[]> {
+  // Google News RSS for the query (when=7d restricts to last 7 days)
+  const gnewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' when:7d')}&hl=en&gl=US&ceid=US:en`;
+  console.info(`🔍 Searching Google News RSS for: "${query}"`);
+
+  const articles = await fetchOneFeed(gnewsUrl, 'Google News');
+
+  // Also try Bing News RSS as backup
+  const bingUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
+  const bingArticles = await fetchOneFeed(bingUrl, 'Bing News');
+
+  const all = [...articles, ...bingArticles];
+
+  // Deduplicate by title similarity
+  const seen = new Set<string>();
+  return all.filter(a => {
+    const key = a.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Fetch many feeds in parallel, deduplicate */
 async function fetchFeeds(urls: string[], label: string): Promise<LiveArticle[]> {
   const results = await Promise.all(urls.map(u => fetchOneFeed(u, label)));
   const flat = results.flat();
@@ -139,8 +165,7 @@ async function fetchFeeds(urls: string[], label: string): Promise<LiveArticle[]>
 }
 
 // ---------------------------------------------------------------------------
-// AI-assisted selection: AI picks indices from REAL fetched articles.
-// AI never generates article text — it only curates what was actually fetched.
+// AI-assisted selection: picks indices from REAL fetched articles only.
 // ---------------------------------------------------------------------------
 async function aiSelectArticles(
   articles: LiveArticle[],
@@ -150,9 +175,8 @@ async function aiSelectArticles(
   if (articles.length === 0) return [];
   if (articles.length <= count) return articles;
 
-  // Build a numbered list of just titles + sources for the AI
   const numbered = articles
-    .slice(0, 60) // cap to avoid token overflow
+    .slice(0, 60)
     .map((a, i) => `[${i}] ${a.source}: ${a.title}`)
     .join('\n');
 
@@ -162,8 +186,12 @@ ${numbered}
 
 Task: ${selectionGoal}
 
-Return ONLY a JSON array of up to ${count} article indices (numbers) from the list above, ordered by relevance. Example: [3, 11, 0, 24, 7]
-Do NOT explain anything. Do NOT generate new articles. ONLY return the JSON array of indices.`;
+CRITICAL RULES:
+- Return ONLY a JSON array of article indices (numbers) from the list above.
+- Do NOT write explanations. Do NOT generate new content. Do NOT apologize.
+- Do NOT say you don't have internet access. These articles ARE real and current.
+- Example response: [3, 11, 0, 24, 7]
+- Pick up to ${count} articles.`;
 
   try {
     const raw = await askGemini(prompt);
@@ -176,7 +204,7 @@ Do NOT explain anything. Do NOT generate new articles. ONLY return the JSON arra
       .map(i => articles[i]);
     if (selected.length > 0) return selected;
   } catch (e) {
-    console.warn('AI selection failed, using keyword/date fallback', e);
+    console.warn('AI selection failed, using fallback', e);
   }
   return articles.slice(0, count);
 }
@@ -186,19 +214,47 @@ Do NOT explain anything. Do NOT generate new articles. ONLY return the JSON arra
 // ---------------------------------------------------------------------------
 export async function fetchLiveNews(category: string, query?: string): Promise<LiveArticle[]> {
   try {
-    // ── AI-curated categories ──────────────────────────────────────────────
+    // ── Search query → Use Google News RSS (returns REAL current articles) ──
+    if (query) {
+      // 1. Search Google News + Bing News for the exact query
+      const searchResults = await searchGoogleNews(query);
+
+      if (searchResults.length > 0) {
+        console.info(`✅ Found ${searchResults.length} real articles for "${query}"`);
+        return searchResults.slice(0, 15);
+      }
+
+      // 2. If Google/Bing returned nothing, try broad feeds + keyword filter
+      console.warn(`⚠️ Google News returned 0 results for "${query}", trying broad feeds...`);
+      const broadAll = await fetchFeeds(BROAD_FEEDS, 'News');
+      const kw = query.toLowerCase().split(' ').filter(w => w.length > 2);
+      const matched = broadAll.filter(a => {
+        const text = (a.title + ' ' + a.summary).toLowerCase();
+        return kw.some(w => text.includes(w));
+      });
+      if (matched.length > 0) return shuffle(matched).slice(0, 10);
+
+      // 3. Last resort: return broad news with a console warning
+      console.warn(`⚠️ No articles found matching "${query}" in any source`);
+      return shuffle(broadAll).slice(0, 10);
+    }
+
+    // ── Leaders ────────────────────────────────────────────────────────────
     if (category === 'Leaders') {
-      // Fetch broadly, then keyword-filter for leadership content
+      // First try Google News search for world leaders
+      const leaderSearch = await searchGoogleNews('world leaders summit president prime minister');
+      if (leaderSearch.length >= 5) {
+        return leaderSearch.slice(0, 10);
+      }
+
+      // Fallback: broad feeds + keyword filter
       const all = await fetchFeeds(BROAD_FEEDS, 'World News');
       const leaderArticles = all.filter(a => {
         const text = (a.title + ' ' + a.summary).toLowerCase();
         return LEADER_KEYWORDS.some(kw => text.includes(kw));
       });
-      // If enough match via keywords, return directly (no AI needed)
-      if (leaderArticles.length >= 5) {
-        return shuffle(leaderArticles).slice(0, 10);
-      }
-      // Otherwise let AI pick from the broad pool
+      if (leaderArticles.length >= 5) return shuffle(leaderArticles).slice(0, 10);
+
       return aiSelectArticles(
         all,
         'Select articles specifically about world leaders, presidents, prime ministers, government heads, diplomatic summits, or major political decisions.',
@@ -206,6 +262,7 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
       );
     }
 
+    // ── Blind Spot ─────────────────────────────────────────────────────────
     if (category === 'Blind Spot') {
       const all = await fetchFeeds(BROAD_FEEDS, 'World News');
       return aiSelectArticles(
@@ -215,32 +272,19 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
       );
     }
 
-    if (category === 'Local' || query) {
-      const searchTerm = query || 'India local news';
-      // Fetch from broad feeds + try India-specific ones
-      const feeds = [...BROAD_FEEDS];
-      if (category === 'Local' || searchTerm.toLowerCase().includes('india')) {
-        feeds.push('https://timesofindia.indiatimes.com/rssfeedstopstories.cms');
-      }
-      const all = await fetchFeeds(feeds, 'Local News');
+    // ── Local ──────────────────────────────────────────────────────────────
+    if (category === 'Local') {
+      // Use Google News for local/India news
+      const localResults = await searchGoogleNews('India news today');
+      if (localResults.length > 0) return localResults.slice(0, 12);
 
-      // Client-side keyword filter first
-      const kw = searchTerm.toLowerCase().split(' ').filter(w => w.length > 3);
-      const matched = all.filter(a => {
-        const text = (a.title + ' ' + a.summary).toLowerCase();
-        return kw.some(w => text.includes(w));
-      });
-
-      if (matched.length >= 5) return shuffle(matched).slice(0, 10);
-
-      return aiSelectArticles(
-        all,
-        `Select articles most relevant to the search topic: "${searchTerm}". Include any closely related regional or subject-matter news.`,
-        8
-      );
+      // Fallback to India RSS feeds
+      const indiaFeeds = CATEGORY_FEEDS['India'] || [];
+      const articles = await fetchFeeds(indiaFeeds, 'India');
+      return shuffle(articles);
     }
 
-    // ── Standard RSS categories ────────────────────────────────────────────
+    // ── Standard RSS categories (World, America, Europe, Sports, Tech) ────
     const urls = CATEGORY_FEEDS[category] || CATEGORY_FEEDS['World'];
     const articles = await fetchFeeds(urls, category);
     return shuffle(articles);

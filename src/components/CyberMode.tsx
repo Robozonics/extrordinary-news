@@ -171,20 +171,17 @@ export default function CyberMode({ view, setMode }: Props) {
         console.warn("Scraping failed or timed out.");
       }
 
-      // AI Fallback
-      try {
-        const aiPrompt = `You are an elite journalist. We failed to scrape the article from ${article.source}.
-Title: ${article.title}
-Summary: ${article.summary}
-
-Please write a highly detailed, comprehensive, and professional full-length news article (at least 400 words) based on this information. Format it entirely in clean HTML <p> tags. Do not output markdown blocks. Do not include any tags other than <p> and <b>.`;
-        
-        let aiStory = await askGemini(aiPrompt);
-        aiStory = aiStory.replace(/```html/gi, '').replace(/```/g, '').trim();
-        setFullStoryContent(aiStory + "\n\n<p><em style='color: #8B5CF6;'>* This full article was expanded and synthesized by AI because the original source blocked direct extraction.</em></p>");
-      } catch (e) {
-        setFullStoryContent(article.content || article.summary || "Failed to load story.");
-      }
+      // Show the content we already have + link to original source
+      const existingContent = article.content || article.summary || '';
+      const cleanContent = existingContent.replace(/<[^>]*>?/gm, '').trim();
+      const originalLink = article.link !== '#' 
+        ? `<p style="margin-top:24px;"><a href="${article.link}" target="_blank" rel="noopener noreferrer" style="color:#00F0FF;font-weight:bold;text-decoration:underline;">📰 Read the full article on ${article.source} →</a></p>`
+        : '';
+      setFullStoryContent(
+        `<p style="font-size:1.15em;line-height:1.8;">${cleanContent}</p>` +
+        `<p style="margin-top:16px;padding:16px;background:rgba(139,92,246,0.15);border-radius:12px;border-left:4px solid #8B5CF6;"><em style="color:#8B5CF6;">The original source blocked direct content extraction. Above is the summary from the RSS feed.</em></p>` +
+        originalLink
+      );
       
       setIsFullStoryLoading(false);
     }
