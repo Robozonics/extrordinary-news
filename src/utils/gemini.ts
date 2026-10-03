@@ -2,7 +2,7 @@ const KEYS = [
   import.meta.env.VITE_GEMINI_KEY_1 || '',
   import.meta.env.VITE_GEMINI_KEY_2 || '',
   import.meta.env.VITE_GEMINI_KEY_3 || ''
-];
+].filter(k => k.length > 0);
 
 let currentKeyIndex = 0;
 
@@ -21,7 +21,7 @@ async function askGroq(prompt: string): Promise<string> {
       "Authorization": `Bearer ${GROQ_API_KEY}`
     },
     body: JSON.stringify({
-      model: "llama3-8b-8192", // Fixed model name; 'openai/gpt-oss-120b' does not exist on Groq
+      model: "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -41,7 +41,7 @@ export async function askGemini(prompt: string, context?: string): Promise<strin
   // Retry up to 4 times across keys
   for (let attempt = 0; attempt < 4; attempt++) {
     const key = KEYS[currentKeyIndex];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
     
     try {
       const response = await fetch(url, {
