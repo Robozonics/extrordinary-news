@@ -7,11 +7,17 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = () => {
-      // Fallback: try without crossOrigin
+      // Fallback 1: Try with a CORS proxy to avoid tainting the canvas
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(src)}`;
       const img2 = new Image();
+      img2.crossOrigin = 'anonymous';
       img2.onload = () => resolve(img2);
-      img2.onerror = () => resolve(img2); // resolve anyway, we'll draw bg only
-      img2.src = src;
+      img2.onerror = () => {
+        // If proxy fails, return an empty image so it just draws the background gracefully
+        // without tainting the canvas
+        resolve(new Image()); 
+      };
+      img2.src = proxyUrl;
     };
     img.src = src;
   });
