@@ -318,15 +318,17 @@ export async function scrapeFullArticle(url: string): Promise<string> {
     let html = '';
 
     try {
-      const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
-      if (res.ok) html = await res.text();
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        const data = await res.json();
+        html = data.contents;
+      }
     } catch {}
 
     if (!html || html.includes('Cloudflare') || html.includes('captcha')) {
       try {
-        const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-        const data = await res2.json();
-        html = data.contents;
+        const res2 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
+        if (res2.ok) html = await res2.text();
       } catch {}
     }
 
