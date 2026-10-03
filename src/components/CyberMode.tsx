@@ -228,18 +228,34 @@ CRITICAL RULES:
     setFactCheckResult(null); // Clear previous result if any
     
     try {
-      // 1. Search Google News for real-time context to prevent AI hallucination
-      const realTimeArticles = await fetchLiveNews('Search', factCheckQuery);
+      // 1. Extract keywords from claim for better Google News RSS matches
+      const stopWords = ['is', 'it', 'true', 'that', 'did', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'what', 'why', 'when', 'how', 'who', 'does', 'do', 'are'];
+      const keywords = factCheckQuery
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .split(' ')
+        .filter(w => !stopWords.includes(w) && w.length > 2)
+        .slice(0, 5) // max 5 keywords for RSS search
+        .join(' ');
       
+      const searchTerms = keywords.length > 0 ? keywords : factCheckQuery;
+      
+      // 2. Search Google News for real-time context
+      const realTimeArticles = await fetchLiveNews('Search', searchTerms);
+      
+      // 3. Combine search results with the articles currently on the user's screen
+      const combinedContext = [...realTimeArticles, ...articles.slice(0, 15)];
+      const uniqueContext = combinedContext.filter((v,i,a)=>a.findIndex(v2=>(v2.title===v.title))===i);
+
       let context = '';
-      if (realTimeArticles && realTimeArticles.length > 0) {
-        context = "RECENT NEWS ARTICLES FOUND ON THE WEB RELATED TO THIS CLAIM:\n" + 
-                  realTimeArticles.slice(0, 5).map(a => `Source: ${a.source}\nHeadline: ${a.title}\nSummary: ${a.summary}`).join('\n\n');
+      if (uniqueContext.length > 0) {
+        context = "RECENT NEWS & FEED ARTICLES RELATED TO THIS CLAIM:\n" + 
+                  uniqueContext.slice(0, 8).map(a => `Source: ${a.source}\nHeadline: ${a.title}\nSummary: ${a.summary}`).join('\n\n');
       } else {
-        context = "No recent articles found on the web. Rely on your base knowledge.";
+        context = "No recent articles found. Rely on your base knowledge.";
       }
 
-      // 2. Pass the real-time context to the fact-checker
+      // 4. Pass the enhanced real-time context to the fact-checker
       const result = await factCheckWithGemini(factCheckQuery, context);
       setFactCheckResult(result);
     } catch (e) {
