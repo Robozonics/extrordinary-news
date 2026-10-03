@@ -5,9 +5,12 @@ import BottomNav from './components/BottomNav';
 import AIDrawer from './components/AIDrawer';
 import Ticker from './components/Ticker';
 
+import type { LiveArticle } from './utils/liveNews';
+
 function App() {
   const [mode, setMode] = useState<'cyber' | 'broadsheet' | 'inshorts' | 'saved' | 'factcheck'>('cyber');
   const [isAIOpen, setIsAIOpen] = useState(false);
+  const [articles, setArticles] = useState<LiveArticle[]>([]);
 
   useEffect(() => {
     document.documentElement.className = `theme-${mode === 'broadsheet' ? 'broadsheet' : 'cyber'}`;
@@ -18,10 +21,10 @@ function App() {
       <Ticker />
       
       <div className="transition-opacity duration-500">
-        {mode === 'cyber' && <CyberMode view="feed" setMode={setMode} />}
-        {mode === 'factcheck' && <CyberMode view="factcheck" setMode={setMode} />}
-        {mode === 'inshorts' && <CyberMode view="inshorts" setMode={setMode} />}
-        {mode === 'saved' && <CyberMode view="saved" setMode={setMode} />}
+        {mode === 'cyber' && <CyberMode view="feed" setMode={setMode} onArticlesUpdate={setArticles} />}
+        {mode === 'factcheck' && <CyberMode view="factcheck" setMode={setMode} onArticlesUpdate={setArticles} />}
+        {mode === 'inshorts' && <CyberMode view="inshorts" setMode={setMode} onArticlesUpdate={setArticles} />}
+        {mode === 'saved' && <CyberMode view="saved" setMode={setMode} onArticlesUpdate={setArticles} />}
         {mode === 'broadsheet' && <BroadsheetMode />}
       </div>
 
@@ -31,7 +34,7 @@ function App() {
         toggleAI={() => setIsAIOpen(true)} 
       />
 
-      <AIDrawer isOpen={isAIOpen} onClose={() => setIsAIOpen(false)} />
+      <AIDrawer isOpen={isAIOpen} onClose={() => setIsAIOpen(false)} articles={articles} />
     </div>
   );
 }

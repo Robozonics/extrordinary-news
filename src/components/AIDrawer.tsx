@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Sparkles, Send, Play, Pause, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { askGemini } from '../utils/gemini';
-import { mockArticles } from '../data/mockData';
+import type { LiveArticle } from '../utils/liveNews';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  articles: LiveArticle[];
 }
 
-export default function AIDrawer({ isOpen, onClose }: Props) {
+export default function AIDrawer({ isOpen, onClose, articles }: Props) {
   const [query, setQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<{role: 'user'|'ai', text: string}[]>([
@@ -28,8 +29,8 @@ export default function AIDrawer({ isOpen, onClose }: Props) {
     setQuery('');
     setIsTyping(true);
     
-    // Provide the top 2 articles as context so it can answer smartly
-    const context = mockArticles.map(a => `${a.title}: ${a.content.inshorts60Words}`).join('\n\n');
+    // Use the actual live articles passed from props to ground the AI
+    const context = articles.slice(0, 15).map(a => `Source: ${a.source}\nTitle: ${a.title}\nSummary: ${a.summary}`).join('\n\n');
     
     try {
       const response = await askGemini(userQ, context);

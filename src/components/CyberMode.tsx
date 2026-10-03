@@ -9,12 +9,13 @@ import { Globe, Play, Pause, Bookmark, ShieldAlert, Loader2, Volume2, Search, Ma
 interface Props {
   view: 'feed' | 'inshorts' | 'saved' | 'factcheck';
   setMode?: (m: 'cyber' | 'broadsheet' | 'inshorts' | 'saved' | 'factcheck') => void;
+  onArticlesUpdate?: (articles: LiveArticle[]) => void;
 }
 
 const CATEGORIES = ['World', 'Leaders', 'Local', 'Blind Spot', 'Tech', 'America', 'Europe', 'Sports'] as const;
 type Category = typeof CATEGORIES[number];
 
-export default function CyberMode({ view, setMode }: Props) {
+export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {
   const [category, setCategory] = useState<Category>('World');
   const [articles, setArticles] = useState<LiveArticle[]>([]);
   const [saved, setSaved] = useState<LiveArticle[]>(() => {
@@ -75,6 +76,7 @@ export default function CyberMode({ view, setMode }: Props) {
 
     const data = await fetchLiveNews(fetchCat, query);
     setArticles(data);
+    if (onArticlesUpdate) onArticlesUpdate(data);
     setLoading(false);
   };
 
