@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { fetchLiveNews, scrapeFullArticle } from '../utils/liveNews';
 import type { LiveArticle } from '../utils/liveNews';
 import { translateWithGemini, factCheckWithGemini, askGemini } from '../utils/gemini';
+import ShareMenu from './ShareMenu';
 import { Globe, Play, Pause, Bookmark, ShieldAlert, Loader2, Volume2, Search, MapPin, Maximize2, X, RefreshCw, Eye, BookOpen, Brain, Scale, Wallet, Sparkles, Mic, Settings } from 'lucide-react';
 
 interface Props {
@@ -510,6 +511,8 @@ Please write a highly detailed, comprehensive, and professional full-length news
                       <button onClick={() => loadFullStory(article)} className="col-span-2 sm:col-span-1 flex justify-center items-center gap-1 md:gap-2 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm text-black hover:bg-white transition-all shadow-lg" style={{ backgroundColor: themeColor }}>
                         <BookOpen size={14} className="md:w-4 md:h-4"/> Full Story
                       </button>
+
+                      <ShareMenu article={article} themeColor={themeColor} />
 
                       <div className="hidden sm:block flex-1"></div>
 
