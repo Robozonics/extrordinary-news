@@ -41,13 +41,14 @@ export async function askGemini(prompt: string, context?: string): Promise<strin
   // Retry up to 4 times across keys
   for (let attempt = 0; attempt < 4; attempt++) {
     const key = KEYS[currentKeyIndex];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${key}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
     
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': key,
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: fullPrompt }] }]
