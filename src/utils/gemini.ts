@@ -12,22 +12,23 @@ async function sleep(ms: number) {
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || "";
 
-async function askPollinations(prompt: string): Promise<string> {
-  const url = "https://text.pollinations.ai/openai";
+async function askGroq(prompt: string): Promise<string> {
+  const url = "https://api.groq.com/openai/v1/chat/completions";
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`
     },
     body: JSON.stringify({
-      model: "openai",
+      model: "llama3-8b-8192", // Fixed model name; 'openai/gpt-oss-120b' does not exist on Groq
       messages: [{ role: "user", content: prompt }]
     })
   });
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Pollinations API failed:", errText);
-    throw new Error("Pollinations API failed");
+    console.error("Groq API failed:", errText);
+    throw new Error("Groq API failed");
   }
   const data = await res.json();
   return data.choices[0].message.content;
@@ -40,14 +41,6 @@ export async function askGemini(prompt: string, context?: string): Promise<strin
   // Retry up to 4 times across keys
   for (let attempt = 0; attempt < 4; attempt++) {
     const key = KEYS[currentKeyIndex];
-    if (!key) {
-      console.warn("No Gemini key provided, using Pollinations fallback immediately...");
-      try {
-        return await askPollinations(fullPrompt);
-      } catch (err) {
-        return "Sorry, the AI is currently overloaded. Please try again later.";
-      }
-    }
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${key}`;
     
     try {
@@ -77,9 +70,9 @@ export async function askGemini(prompt: string, context?: string): Promise<strin
       
       if (attempt === 3) {
         try {
-          console.warn("Gemini exhausted, attempting Pollinations fallback...");
-          return await askPollinations(fullPrompt);
-        } catch (fallbackErr) {
+          console.warn("Gemini exhausted, attempting Groq fallback...");
+          return await askGroq(fullPrompt);
+        } catch (groqErr) {
           return "Sorry, the AI is currently overloaded (503). We are experiencing high traffic. Please try again in a few moments.";
         }
       }
