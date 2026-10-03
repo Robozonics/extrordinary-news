@@ -1,25 +1,29 @@
 import { askGemini } from './gemini';
 
 // ---------------------------------------------------------------------------
-// RSS feed sources — broad coverage across categories
+// RSS Sources
 // ---------------------------------------------------------------------------
-const MULTI_RSS_FEEDS: Record<string, string[]> = {
+
+// Per-category feeds (used for World, America, Europe, etc.)
+const CATEGORY_FEEDS: Record<string, string[]> = {
   World: [
     'http://feeds.bbci.co.uk/news/world/rss.xml',
     'https://www.aljazeera.com/xml/rss/all.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    'https://www.france24.com/en/rss',
   ],
   America: [
     'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
     'https://feeds.npr.org/1001/rss.xml',
+    'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
   ],
   Europe: [
     'https://www.france24.com/en/europe/rss',
-    'https://feeds.bbci.co.uk/news/world/europe/rss.xml',
+    'http://feeds.bbci.co.uk/news/world/europe/rss.xml',
   ],
   India: [
     'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
-    'https://www.thehindu.com/news/national/feeder/default.rss',
+    'https://feeds.feedburner.com/ndtvnews-india-news',
   ],
   Sports: [
     'http://feeds.bbci.co.uk/sport/rss.xml',
@@ -28,20 +32,36 @@ const MULTI_RSS_FEEDS: Record<string, string[]> = {
   Tech: [
     'https://techcrunch.com/feed/',
     'https://www.theverge.com/rss/index.xml',
+    'https://feeds.arstechnica.com/arstechnica/index',
   ],
 };
 
-// Extra feeds used purely to build a grounding context for AI categories
-const AI_CONTEXT_FEEDS = [
+// Broad set of feeds — fetched for AI-curated categories (Leaders, Blind Spot, Search, Local)
+const BROAD_FEEDS = [
   'http://feeds.bbci.co.uk/news/world/rss.xml',
   'https://www.aljazeera.com/xml/rss/all.xml',
   'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
   'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
   'https://www.france24.com/en/rss',
   'https://feeds.npr.org/1001/rss.xml',
+  'https://feeds.npr.org/1004/rss.xml',
   'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
   'https://techcrunch.com/feed/',
   'http://feeds.bbci.co.uk/sport/rss.xml',
+  'http://feeds.bbci.co.uk/news/world/europe/rss.xml',
+  'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
+  'http://feeds.bbci.co.uk/news/world/asia/rss.xml',
+  'https://www.theguardian.com/world/rss',
+  'https://www.theguardian.com/us-news/rss',
+];
+
+// Keywords for client-side pre-filtering (avoids AI for Leaders category)
+const LEADER_KEYWORDS = [
+  'president', 'prime minister', 'chancellor', 'minister', 'senator',
+  'secretary of state', 'summit', 'g7', 'g20', 'nato', 'un ', 'diplomat',
+  'white house', 'kremlin', 'parliament', 'congress', 'biden', 'trump',
+  'modi', 'macron', 'putin', 'xi jinping', 'sunak', 'zelensky', 'netanyahu',
+  'leader', 'election', 'vote', 'policy', 'government',
 ];
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -58,7 +78,7 @@ export interface LiveArticle {
   sentiment?: 'positive' | 'negative' | 'neutral';
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
+function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -66,137 +86,167 @@ function shuffleArray<T>(arr: T[]): T[] {
   return arr;
 }
 
-/** Fetch a single RSS feed via rss2json with a 10s hard timeout */
-async function fetchRSSFeed(rssUrl: string, category: string): Promise<LiveArticle[]> {
+function isRecent(pubDate: string): boolean {
+  const t = new Date(pubDate).getTime();
+  return isNaN(t) || Date.now() - t <= ONE_WEEK_MS;
+}
+
+/** Fetch one RSS feed. Returns [] on timeout / error. */
+async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<LiveArticle[]> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
     const res = await fetch(
       `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
-      { signal: controller.signal }
+      { signal: ctrl.signal }
     );
     clearTimeout(timer);
     const data = await res.json();
     if (data.status !== 'ok') return [];
 
-    const now = Date.now();
     return data.items
-      .filter((item: any) => {
-        if (!item.title) return false;
-        const pub = new Date(item.pubDate).getTime();
-        return isNaN(pub) || now - pub <= ONE_WEEK_MS;
-      })
-      .map((item: any, index: number) => ({
-        id: `${Math.random().toString(36).substr(2, 9)}-${index}`,
-        title: item.title,
-        link: item.link,
+      .filter((item: any) => item.title && isRecent(item.pubDate))
+      .map((item: any, idx: number) => ({
+        id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
+        title: item.title.trim(),
+        link: item.link || '#',
         pubDate: item.pubDate,
-        source: data.feed.title || category,
+        source: data.feed.title || labelCategory,
         image:
           item.enclosure?.link ||
           item.thumbnail ||
-          `https://picsum.photos/seed/${encodeURIComponent(category + index)}/600/400.webp`,
-        summary: item.description.replace(/<[^>]*>?/gm, '').substring(0, 200) + '...',
-        content: item.content || item.description,
+          `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/600/400.webp`,
+        summary:
+          item.description?.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
+        content: item.content || item.description || '',
       }));
   } catch {
-    console.warn(`RSS timed out or failed: ${rssUrl}`);
     return [];
   }
 }
 
-// ---------------------------------------------------------------------------
-// Build a grounding context string from REAL fetched headlines.
-// This is what gets passed to the AI so it answers based on actual news,
-// not its training data.
-// ---------------------------------------------------------------------------
-async function buildNewsContext(extraFeeds?: string[]): Promise<string> {
-  const feeds = extraFeeds ?? AI_CONTEXT_FEEDS;
-  const results = await Promise.all(feeds.map(url => fetchRSSFeed(url, 'World')));
-  const now = Date.now();
-
-  const articles = results
-    .flat()
-    .filter(a => {
-      const pub = new Date(a.pubDate).getTime();
-      return isNaN(pub) || now - pub <= ONE_WEEK_MS;
-    })
-    .slice(0, 40); // cap at 40 articles to keep prompt manageable
-
-  if (articles.length === 0) return '';
-
-  return articles
-    .map(
-      (a, i) =>
-        `[${i + 1}] ${a.source}: "${a.title}"\n    Summary: ${a.summary}`
-    )
-    .join('\n\n');
+/** Fetch many feeds in parallel, deduplicate by title, keep last-7-days only */
+async function fetchFeeds(urls: string[], label: string): Promise<LiveArticle[]> {
+  const results = await Promise.all(urls.map(u => fetchOneFeed(u, label)));
+  const flat = results.flat();
+  const seen = new Set<string>();
+  return flat.filter(a => {
+    const key = a.title.toLowerCase().slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Main fetch function
+// AI-assisted selection: AI picks indices from REAL fetched articles.
+// AI never generates article text — it only curates what was actually fetched.
+// ---------------------------------------------------------------------------
+async function aiSelectArticles(
+  articles: LiveArticle[],
+  selectionGoal: string,
+  count = 8
+): Promise<LiveArticle[]> {
+  if (articles.length === 0) return [];
+  if (articles.length <= count) return articles;
+
+  // Build a numbered list of just titles + sources for the AI
+  const numbered = articles
+    .slice(0, 60) // cap to avoid token overflow
+    .map((a, i) => `[${i}] ${a.source}: ${a.title}`)
+    .join('\n');
+
+  const prompt = `You are a news editor. Below are real news articles just fetched from live RSS feeds.
+
+${numbered}
+
+Task: ${selectionGoal}
+
+Return ONLY a JSON array of up to ${count} article indices (numbers) from the list above, ordered by relevance. Example: [3, 11, 0, 24, 7]
+Do NOT explain anything. Do NOT generate new articles. ONLY return the JSON array of indices.`;
+
+  try {
+    const raw = await askGemini(prompt);
+    const match = raw.match(/\[[\d,\s]+\]/);
+    if (!match) throw new Error('No array found');
+    const indices: number[] = JSON.parse(match[0]);
+    const selected = indices
+      .filter(i => typeof i === 'number' && i >= 0 && i < articles.length)
+      .slice(0, count)
+      .map(i => articles[i]);
+    if (selected.length > 0) return selected;
+  } catch (e) {
+    console.warn('AI selection failed, using keyword/date fallback', e);
+  }
+  return articles.slice(0, count);
+}
+
+// ---------------------------------------------------------------------------
+// Public fetch function
 // ---------------------------------------------------------------------------
 export async function fetchLiveNews(category: string, query?: string): Promise<LiveArticle[]> {
   try {
-    const todayStr = new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    // AI-driven categories: fetch REAL news context first, then ask AI to curate
-    if (query || category === 'Local' || category === 'Leaders' || category === 'Blind Spot') {
-      // 1. Fetch real headlines from news outlets (runs in parallel with building prompt)
-      console.info('📡 Fetching real news context from RSS feeds...');
-      const newsContext = await buildNewsContext();
-
-      const contextBlock = newsContext
-        ? `\n\nHere are REAL news articles fetched RIGHT NOW (${todayStr}) from major outlets (BBC, Al Jazeera, NYT, NPR, France24, etc.):\n\n${newsContext}\n\n`
-        : '';
-
-      const noContextNote = newsContext
-        ? 'Base your answer EXCLUSIVELY on the real articles listed above. Do NOT use your training knowledge.'
-        : `Today is ${todayStr}. Use your best knowledge of recent events from within the last 7 days only.`;
-
-      let searchPrompt = '';
-
-      if (category === 'Leaders') {
-        searchPrompt = `${contextBlock}You are a news editor. From the real articles above, identify and return 5 stories specifically about global World Leaders (Presidents, Prime Ministers, heads of state) — their quotes, decisions, meetings, or actions within the last 7 days.${noContextNote}\n\nReturn ONLY a valid JSON array with keys: "title", "summary", "source", "imageKeyword" (one word). No markdown, just JSON.`;
-      } else if (category === 'Blind Spot') {
-        searchPrompt = `${contextBlock}You are an investigative editor. From the real articles above, pick 5 stories that are critically important but are being UNDERREPORTED or OVERLOOKED by mainstream coverage. These are the hidden gems or "blind spots" in the news cycle.${noContextNote}\n\nReturn ONLY a valid JSON array with keys: "title", "summary", "source", "imageKeyword" (one word). No markdown, just JSON.`;
-      } else {
-        const topic = query || category;
-        searchPrompt = `${contextBlock}You are a news editor. From the real articles above, find and return 5 stories most relevant to: "${topic}". If fewer than 5 match, supplement with related stories.${noContextNote}\n\nReturn ONLY a valid JSON array with keys: "title", "summary", "source", "imageKeyword" (one word). No markdown, just JSON.`;
+    // ── AI-curated categories ──────────────────────────────────────────────
+    if (category === 'Leaders') {
+      // Fetch broadly, then keyword-filter for leadership content
+      const all = await fetchFeeds(BROAD_FEEDS, 'World News');
+      const leaderArticles = all.filter(a => {
+        const text = (a.title + ' ' + a.summary).toLowerCase();
+        return LEADER_KEYWORDS.some(kw => text.includes(kw));
+      });
+      // If enough match via keywords, return directly (no AI needed)
+      if (leaderArticles.length >= 5) {
+        return shuffle(leaderArticles).slice(0, 10);
       }
-
-      try {
-        const aiResponse = await askGemini(searchPrompt);
-        const jsonStr = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-        const items = JSON.parse(jsonStr);
-        return items.map((item: any, i: number) => ({
-          id: `ai-${Date.now()}-${i}`,
-          title: item.title,
-          link: '#',
-          pubDate: new Date().toISOString(),
-          source: item.source || 'Live News Desk',
-          image: `https://picsum.photos/seed/${encodeURIComponent(item.title || i)}/600/400.webp`,
-          summary: item.summary,
-          content: item.summary,
-          sentiment: 'neutral' as const,
-        }));
-      } catch (e) {
-        console.error('AI news parse failed, falling back to RSS', e);
-        // Fall through to normal RSS fetch
-      }
+      // Otherwise let AI pick from the broad pool
+      return aiSelectArticles(
+        all,
+        'Select articles specifically about world leaders, presidents, prime ministers, government heads, diplomatic summits, or major political decisions.',
+        8
+      );
     }
 
-    // Standard RSS fetch for named categories
-    const urls = MULTI_RSS_FEEDS[category] || MULTI_RSS_FEEDS['World'];
-    const resultsArray = await Promise.all(urls.map(url => fetchRSSFeed(url, category)));
-    return shuffleArray(resultsArray.flat().filter(a => a.title));
+    if (category === 'Blind Spot') {
+      const all = await fetchFeeds(BROAD_FEEDS, 'World News');
+      return aiSelectArticles(
+        all,
+        'Select articles that are critically important but appear to be UNDERREPORTED — stories that deserve more attention, "blind spots" in mainstream coverage, or overlooked global crises.',
+        8
+      );
+    }
+
+    if (category === 'Local' || query) {
+      const searchTerm = query || 'India local news';
+      // Fetch from broad feeds + try India-specific ones
+      const feeds = [...BROAD_FEEDS];
+      if (category === 'Local' || searchTerm.toLowerCase().includes('india')) {
+        feeds.push('https://timesofindia.indiatimes.com/rssfeedstopstories.cms');
+      }
+      const all = await fetchFeeds(feeds, 'Local News');
+
+      // Client-side keyword filter first
+      const kw = searchTerm.toLowerCase().split(' ').filter(w => w.length > 3);
+      const matched = all.filter(a => {
+        const text = (a.title + ' ' + a.summary).toLowerCase();
+        return kw.some(w => text.includes(w));
+      });
+
+      if (matched.length >= 5) return shuffle(matched).slice(0, 10);
+
+      return aiSelectArticles(
+        all,
+        `Select articles most relevant to the search topic: "${searchTerm}". Include any closely related regional or subject-matter news.`,
+        8
+      );
+    }
+
+    // ── Standard RSS categories ────────────────────────────────────────────
+    const urls = CATEGORY_FEEDS[category] || CATEGORY_FEEDS['World'];
+    const articles = await fetchFeeds(urls, category);
+    return shuffle(articles);
+
   } catch (e) {
-    console.error('fetchLiveNews failed', e);
+    console.error('fetchLiveNews error', e);
     return [];
   }
 }
@@ -205,17 +255,15 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
 // Full article scraper (proxy chain)
 // ---------------------------------------------------------------------------
 export async function scrapeFullArticle(url: string): Promise<string> {
-  if (url === '#') return '';
+  if (!url || url === '#') return '';
   try {
     let html = '';
 
-    // Proxy 1: CodeTabs
     try {
       const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
       if (res.ok) html = await res.text();
     } catch {}
 
-    // Proxy 2: AllOrigins fallback
     if (!html || html.includes('Cloudflare') || html.includes('captcha')) {
       try {
         const res2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
@@ -225,14 +273,12 @@ export async function scrapeFullArticle(url: string): Promise<string> {
     }
 
     if (!html || html.includes('Cloudflare') || html.includes('captcha')) {
-      return 'The news source is heavily protected by anti-bot measures (Cloudflare/Paywall). We cannot extract the full article.';
+      return 'The news source is heavily protected (Cloudflare/Paywall). Cannot extract full article.';
     }
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    doc
-      .querySelectorAll('script, style, nav, header, footer, iframe, form, button, aside, .ad, .advertisement')
-      .forEach(el => el.remove());
+    doc.querySelectorAll('script,style,nav,header,footer,iframe,form,button,aside,.ad,.advertisement').forEach(el => el.remove());
 
     const container =
       doc.querySelector('article') ||
@@ -247,9 +293,8 @@ export async function scrapeFullArticle(url: string): Promise<string> {
       .filter(t => t.length > 50);
 
     if (paragraphs.length === 0) {
-      return container.textContent?.replace(/\s+/g, ' ').trim() || 'Failed to extract article content.';
+      return container.textContent?.replace(/\s+/g, ' ').trim() || 'Failed to extract content.';
     }
-
     return paragraphs.join('\n\n');
   } catch (e) {
     console.error(e);
