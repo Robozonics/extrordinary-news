@@ -46,13 +46,15 @@ function shuffleArray(array: any[]) {
 export async function fetchLiveNews(category: string, query?: string): Promise<LiveArticle[]> {
   try {
     if (query || category === 'Local' || category === 'Leaders' || category === 'Blind Spot') {
+      // Include today's date so the AI stays anchored to the current week
+      const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       let searchPrompt = '';
       if (category === 'Leaders') {
-        searchPrompt = `You are a real-time news synthesizer. Provide 5 breaking news headlines and summaries strictly about quotes, statements, actions, or meetings of global World Leaders (e.g., Presidents, Prime Ministers) in the last 24 hours. Return ONLY a valid JSON array of objects with keys: "title", "summary", "source", "imageKeyword" (a single word for unsplash). No markdown, just JSON.`;
+        searchPrompt = `Today is ${todayStr}. You are a real-time news synthesizer. Provide 5 breaking news headlines and summaries strictly about quotes, statements, actions, or meetings of global World Leaders (e.g., Presidents, Prime Ministers) that happened within the LAST 7 DAYS (no older). Return ONLY a valid JSON array of objects with keys: "title", "summary", "source", "imageKeyword" (a single word for unsplash). No markdown, just JSON.`;
       } else if (category === 'Blind Spot') {
-        searchPrompt = `You are a real-time news synthesizer. Provide 5 highly important global news stories that are currently happening but are NOT being covered heavily by mainstream media (under-reported, hidden gems, or crucial blind spots). Return ONLY a valid JSON array of objects with keys: "title", "summary", "source", "imageKeyword". No markdown, just JSON.`;
+        searchPrompt = `Today is ${todayStr}. You are a real-time news synthesizer. Provide 5 highly important global news stories happening RIGHT NOW (within the last 7 days, no older) that are NOT being covered heavily by mainstream media (under-reported, hidden gems, or crucial blind spots). Return ONLY a valid JSON array of objects with keys: "title", "summary", "source", "imageKeyword". No markdown, just JSON.`;
       } else {
-        searchPrompt = `You are a real-time news synthesizer. Provide 5 breaking news headlines and summaries for the topic/location: "${query || category}" strictly from within the last 7 days. Return ONLY a valid JSON array of objects with keys: "title", "summary", "source" (invent a realistic one if needed), "imageKeyword" (a single word for unsplash). No markdown, just JSON.`;
+        searchPrompt = `Today is ${todayStr}. You are a real-time news synthesizer. Provide 5 breaking news headlines and summaries for the topic/location: "${query || category}" strictly from within the LAST 7 DAYS only (nothing older). Return ONLY a valid JSON array of objects with keys: "title", "summary", "source" (invent a realistic one if needed), "imageKeyword" (a single word for unsplash). No markdown, just JSON.`;
       }
       
       const aiResponse = await askGemini(searchPrompt);
@@ -79,21 +81,29 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
     const urls = MULTI_RSS_FEEDS[category] || MULTI_RSS_FEEDS['World'];
     const fetchPromises = urls.map(async (rssUrl) => {
       const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-      const res = await fetch(apiUrl);
-      const data = await res.json();
-      if (data.status === 'ok') {
-        return data.items.map((item: any, index: number) => ({
-          id: `${Math.random().toString(36).substr(2, 9)}-${index}`,
-          title: item.title,
-          link: item.link,
-          pubDate: item.pubDate,
-          source: data.feed.title || category,
-          image: item.enclosure?.link || item.thumbnail || `https://picsum.photos/seed/${encodeURIComponent(category + index)}/600/400.webp`,
-          summary: item.description.replace(/<[^>]*>?/gm, '').substring(0, 180) + '...',
-          content: item.content || item.description
-        }));
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000); // 10s timeout per RSS feed
+        const res = await fetch(apiUrl, { signal: controller.signal });
+        clearTimeout(timer);
+        const data = await res.json();
+        if (data.status === 'ok') {
+          return data.items.map((item: any, index: number) => ({
+            id: `${Math.random().toString(36).substr(2, 9)}-${index}`,
+            title: item.title,
+            link: item.link,
+            pubDate: item.pubDate,
+            source: data.feed.title || category,
+            image: item.enclosure?.link || item.thumbnail || `https://picsum.photos/seed/${encodeURIComponent(category + index)}/600/400.webp`,
+            summary: item.description.replace(/<[^>]*>?/gm, '').substring(0, 180) + '...',
+            content: item.content || item.description
+          }));
+        }
+        return [];
+      } catch (e) {
+        console.warn(`RSS feed timed out or failed: ${rssUrl}`);
+        return [];
       }
-      return [];
     });
 
     const resultsArray = await Promise.all(fetchPromises);
