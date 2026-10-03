@@ -117,20 +117,21 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<Live
 
     return data.items
       .filter((item: any) => item.title && isRecent(item.pubDate))
-      .map((item: any, idx: number) => ({
-        id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
-        title: item.title.trim(),
-        link: item.link || '#',
-        pubDate: item.pubDate,
-        source: data.feed.title || labelCategory,
-        image:
-          item.enclosure?.link ||
-          item.thumbnail ||
-          `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/600/400.webp`,
-        summary:
-          item.description?.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
-        content: item.content || item.description || '',
-      }));
+      .map((item: any, idx: number) => {
+        const rawImg = item.enclosure?.link || item.thumbnail || `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/800/500`;
+        const optimizedImg = `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
+        
+        return {
+          id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
+          title: item.title.trim(),
+          link: item.link || '#',
+          pubDate: item.pubDate,
+          source: data.feed.title || labelCategory,
+          image: optimizedImg,
+          summary: item.description?.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
+          content: item.content || item.description || '',
+        };
+      });
   } catch {
     return [];
   }
