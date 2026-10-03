@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-color: #090A0F;
+    --text-color: #ffffff;
+    --accent: #C6FF00;
+    --secondary: #FF2E93;
+    --border-color: #1F2636;
+    --paper-bg: #e6dac3;
+    --paper-ink: #2b2723;
+  }
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Global thin scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1F2636;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00F0FF;
+}
+
+@layer utilities {
+  .brutal-border {
+    border: 2px solid var(--border-color);
+  }
+  .brutal-shadow {
+    box-shadow: 4px 4px 0px var(--accent);
+  }
+  .broadsheet-divider {
+    border-top: 1px solid var(--paper-ink);
+    border-bottom: 1px solid var(--paper-ink);
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .bionic-text b {
+    font-weight: 900;
+    color: #fff;
+  }
+  .vintage-img {
+    filter: sepia(0.6) contrast(1.2) brightness(0.9) grayscale(0.4);
+    mix-blend-mode: multiply;
+  }
+  
+  .gpu-accelerated {
+    transform: translateZ(0);
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+  }
+
+  .auto-contain {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 400px;
+  }
+}
