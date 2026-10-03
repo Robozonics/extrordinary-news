@@ -484,38 +484,43 @@ export default function CyberMode({ view, setMode }: Props) {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 md:gap-3">
-                      <button onClick={() => speak(article.id, article.summary)} className={`flex justify-center items-center gap-1 md:gap-2 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm transition-all ${playingId === article.id ? 'text-black' : 'bg-white/5 hover:bg-white/10'}`} style={playingId === article.id ? { backgroundColor: themeColor, boxShadow: `0 0 15px ${themeColor}60` } : {}}>
-                        {playingId === article.id ? <Volume2 size={14} className="animate-pulse md:w-4 md:h-4" /> : <Volume2 size={14} className="md:w-4 md:h-4"/>} Listen
+                    {/* Action buttons — clean mobile-first layout */}
+                    <div className="space-y-2">
+                      {/* Full Story — full width prominent CTA */}
+                      <button onClick={() => loadFullStory(article)} className="w-full flex justify-center items-center gap-2 px-4 py-3 rounded-xl font-bold text-sm text-black hover:opacity-90 transition-all shadow-lg" style={{ backgroundColor: themeColor }}>
+                        <BookOpen size={16} /> Read Full Story
                       </button>
-                      
-                      <div className="relative">
-                        <button onClick={() => setShowLangMenu(showLangMenu === article.id ? null : article.id)} disabled={translating === article.id} className="flex justify-center items-center gap-1 md:gap-2 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm bg-white/5 hover:bg-white/10 transition-all disabled:opacity-50">
-                          {translating === article.id ? <Loader2 size={14} className="animate-spin md:w-4 md:h-4" /> : <Globe size={14} className="md:w-4 md:h-4"/>} Translate
+
+                      {/* Bottom row — 4 even buttons */}
+                      <div className="grid grid-cols-4 gap-1.5">
+                        <button onClick={() => speak(article.id, article.summary)} className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-bold text-[10px] md:text-xs transition-all ${playingId === article.id ? 'text-black' : 'bg-white/5 hover:bg-white/10'}`} style={playingId === article.id ? { backgroundColor: themeColor, boxShadow: `0 0 12px ${themeColor}60` } : {}}>
+                          {playingId === article.id ? <Volume2 size={16} className="animate-pulse" /> : <Volume2 size={16} />}
+                          Listen
                         </button>
-                        
-                        {showLangMenu === article.id && (
-                          <div className="absolute bottom-full left-0 mb-2 w-32 bg-[#090A0F] border border-white/20 rounded-xl shadow-2xl overflow-hidden z-50">
-                            {SUPPORTED_LANGUAGES.map(lang => (
-                              <button key={lang} onClick={() => handleTranslate(article.id, article.summary, lang)} className="block w-full text-left px-4 py-2 text-xs md:text-sm font-bold hover:bg-white/10 text-white transition-colors">
-                                {lang}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+
+                        <div className="relative">
+                          <button onClick={() => setShowLangMenu(showLangMenu === article.id ? null : article.id)} disabled={translating === article.id} className="w-full flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-bold text-[10px] md:text-xs bg-white/5 hover:bg-white/10 transition-all disabled:opacity-50">
+                            {translating === article.id ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+                            Translate
+                          </button>
+                          {showLangMenu === article.id && (
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-[#090A0F] border border-white/20 rounded-xl shadow-2xl overflow-hidden z-50">
+                              {SUPPORTED_LANGUAGES.map(lang => (
+                                <button key={lang} onClick={() => handleTranslate(article.id, article.summary, lang)} className="block w-full text-left px-4 py-2 text-xs font-bold hover:bg-white/10 text-white transition-colors">
+                                  {lang}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <ShareMenu article={article} themeColor={themeColor} />
+
+                        <button onClick={() => toggleSave(article)} className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-bold text-[10px] md:text-xs transition-all ${isSaved ? 'text-[#FF2E93] bg-[#FF2E93]/20' : 'bg-white/5 hover:bg-white/10 text-gray-400'}`}>
+                          <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
+                          {isSaved ? 'Saved' : 'Save'}
+                        </button>
                       </div>
-
-                      <button onClick={() => loadFullStory(article)} className="col-span-2 sm:col-span-1 flex justify-center items-center gap-1 md:gap-2 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm text-black hover:bg-white transition-all shadow-lg" style={{ backgroundColor: themeColor }}>
-                        <BookOpen size={14} className="md:w-4 md:h-4"/> Full Story
-                      </button>
-
-                      <ShareMenu article={article} themeColor={themeColor} />
-
-                      <div className="hidden sm:block flex-1"></div>
-
-                      <button onClick={() => toggleSave(article)} className={`absolute sm:relative top-4 right-4 sm:top-auto sm:right-auto p-2 md:p-3 rounded-full transition-all ${isSaved ? 'text-[#FF2E93] bg-[#FF2E93]/20' : 'text-gray-400 bg-black/50 sm:bg-white/5 hover:bg-white/10'}`}>
-                        <Bookmark size={18} className="md:w-5 md:h-5" fill={isSaved ? 'currentColor' : 'none'} />
-                      </button>
                     </div>
                   </div>
                 </motion.article>

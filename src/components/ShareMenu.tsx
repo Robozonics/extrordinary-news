@@ -79,8 +79,7 @@ const SOCIALS = [
         <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
       </svg>
     ),
-    // Instagram has no web share URL — copy text to clipboard instead
-    getUrl: null,
+    getUrl: null, // Instagram has no web share URL — copy to clipboard
   },
 ];
 
@@ -91,25 +90,14 @@ export default function ShareMenu({ article, themeColor = '#00F0FF' }: Props) {
 
   const shareLink = article.link !== '#' ? article.link : window.location.href;
 
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: article.title,
-          text: `📰 ${article.title}\n\n${article.summary}`,
-          url: shareLink,
-        });
-        return;
-      } catch {}
-    }
-    setOpen(true);
-  };
+  // Always open our custom modal — never skip to native share
+  // This ensures the Download JPEG button is always accessible
+  const handleOpen = () => setOpen(true);
 
   const handleSocial = (social: typeof SOCIALS[0]) => {
     if (social.getUrl) {
       window.open(social.getUrl(article.title, shareLink), '_blank', 'noopener,noreferrer');
     } else {
-      // Instagram: copy to clipboard
       const text = `📰 ${article.title}\n\n${article.summary}\n\n${shareLink}\n\n— Extraordinary News ⚡`;
       navigator.clipboard.writeText(text).then(() => {
         setCopied(true);
@@ -136,17 +124,17 @@ export default function ShareMenu({ article, themeColor = '#00F0FF' }: Props) {
   };
 
   return (
-    <div className="relative">
-      {/* Share trigger button */}
+    <>
+      {/* Share trigger — vertical icon+label to match siblings in the grid */}
       <button
-        onClick={handleNativeShare}
-        className="flex justify-center items-center gap-1 md:gap-2 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm bg-white/5 hover:bg-white/10 transition-all"
+        onClick={handleOpen}
+        className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl font-bold text-[10px] md:text-xs bg-white/5 hover:bg-white/10 transition-all"
         title="Share"
       >
-        <Share2 size={14} className="md:w-4 md:h-4" /> Share
+        <Share2 size={16} /> Share
       </button>
 
-      {/* Fallback modal for desktop */}
+      {/* Full-screen bottom sheet (mobile) / dropdown (desktop) */}
       <AnimatePresence>
         {open && (
           <>
@@ -155,80 +143,101 @@ export default function ShareMenu({ article, themeColor = '#00F0FF' }: Props) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm"
               onClick={() => setOpen(false)}
             />
 
-            {/* Panel */}
+            {/* Share panel — full-width bottom sheet on mobile, centered card on desktop */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 16 }}
-              transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 sm:absolute sm:bottom-auto sm:top-auto sm:left-auto sm:right-0 sm:mt-2 z-[201] w-full sm:w-80 bg-[#13151f] border border-white/10 rounded-t-3xl sm:rounded-2xl shadow-[0_0_60px_rgba(0,240,255,0.15)] p-5"
-              style={{ '--tw-ring-color': themeColor } as any}
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
+              className="fixed bottom-0 left-0 right-0 z-[201] w-full max-w-md mx-auto bg-[#13151f] border-t border-white/10 rounded-t-3xl shadow-[0_-8px_40px_rgba(0,240,255,0.12)] overflow-hidden"
             >
-              {/* Header */}
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-white text-base uppercase tracking-widest flex items-center gap-2">
-                  <Share2 size={16} style={{ color: themeColor }} /> Share Story
-                </h3>
-                <button onClick={() => setOpen(false)} className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-gray-400">
-                  <X size={16} />
-                </button>
+              {/* Drag handle pill */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-white/20" />
               </div>
 
-              {/* Title preview */}
-              <p className="text-xs text-gray-400 font-mono mb-4 leading-relaxed line-clamp-2 border-l-2 pl-3" style={{ borderColor: themeColor }}>
-                {article.title}
-              </p>
-
-              {/* Social grid */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {SOCIALS.map(s => (
+              <div className="px-5 pb-6 pt-2">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-black text-white text-sm uppercase tracking-[0.15em] flex items-center gap-2">
+                    <Share2 size={15} style={{ color: themeColor }} /> Share Story
+                  </h3>
                   <button
-                    key={s.id}
-                    onClick={() => handleSocial(s)}
-                    className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all text-white group"
+                    onClick={() => setOpen(false)}
+                    className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-gray-400 transition-colors"
                   >
-                    <span style={{ color: s.color }} className="group-hover:scale-110 transition-transform">
-                      {s.icon}
-                    </span>
-                    <span className="text-[10px] font-bold text-gray-400 group-hover:text-white transition-colors">
-                      {s.id === 'instagram' ? (copied ? '✓ Copied!' : 'Instagram') : s.label}
-                    </span>
+                    <X size={16} />
                   </button>
-                ))}
+                </div>
+
+                {/* Title preview */}
+                <p
+                  className="text-[11px] text-gray-400 font-mono mb-4 leading-relaxed line-clamp-2 border-l-2 pl-3"
+                  style={{ borderColor: themeColor }}
+                >
+                  {article.title}
+                </p>
+
+                {/* Social grid — always 3 columns, clean and even */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {SOCIALS.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSocial(s)}
+                      className="flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/10 active:scale-95 transition-all text-white group"
+                    >
+                      <span style={{ color: s.color }} className="group-hover:scale-110 transition-transform">
+                        {s.icon}
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-500 group-hover:text-white transition-colors leading-tight">
+                        {s.id === 'instagram' ? (copied ? '✓ Copied!' : 'Instagram') : s.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-white/[0.06] my-3" />
+
+                {/* Copy link + Download — side by side on mobile for clean layout */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Copy Link */}
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex items-center justify-center gap-2 px-3 py-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/10 active:scale-95 transition-all text-white"
+                  >
+                    {copied ? (
+                      <Check size={15} style={{ color: themeColor }} />
+                    ) : (
+                      <Copy size={15} className="text-gray-400" />
+                    )}
+                    <span className="text-xs font-bold">{copied ? 'Copied!' : 'Copy Link'}</span>
+                  </button>
+
+                  {/* Download JPEG */}
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="flex items-center justify-center gap-2 px-3 py-3.5 rounded-2xl font-bold text-xs text-black active:scale-95 transition-all hover:opacity-90 disabled:opacity-50"
+                    style={{ background: `linear-gradient(135deg, ${themeColor}, #FF2E93)` }}
+                  >
+                    {downloading ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Download size={15} />
+                    )}
+                    {downloading ? 'Saving...' : 'Save JPEG'}
+                  </button>
+                </div>
               </div>
-
-              {/* Divider */}
-              <div className="border-t border-white/5 my-3" />
-
-              {/* Copy link */}
-              <button
-                onClick={handleCopyLink}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all text-white mb-2"
-              >
-                {copied ? <Check size={16} style={{ color: themeColor }} /> : <Copy size={16} className="text-gray-400" />}
-                <span className="text-sm font-bold">{copied ? 'Link Copied!' : 'Copy Link'}</span>
-              </button>
-
-              {/* Download JPEG */}
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-black text-sm text-black transition-all hover:opacity-90 disabled:opacity-60"
-                style={{ background: `linear-gradient(135deg, ${themeColor}, #FF2E93)` }}
-              >
-                {downloading
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <Download size={16} />}
-                {downloading ? 'Generating...' : 'Download as JPEG'}
-              </button>
             </motion.div>
           </>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
