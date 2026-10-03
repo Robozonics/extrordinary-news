@@ -176,12 +176,18 @@ export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {
       // Show the content we already have + link to original source
       const existingContent = article.content || article.summary || '';
       const cleanContent = existingContent.replace(/<[^>]*>?/gm, '').trim();
+      
       const originalLink = article.link !== '#' 
-        ? `<p style="margin-top:24px;"><a href="${article.link}" target="_blank" rel="noopener noreferrer" style="color:#00F0FF;font-weight:bold;text-decoration:underline;">📰 Read the full article on ${article.source} →</a></p>`
+        ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">
+             <a href="${article.link}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 8px; background: #00F0FF; color: black; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 14px rgba(0,240,255,0.25);">
+               Read the full story on ${article.source} 
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+             </a>
+           </div>`
         : '';
+
       setFullStoryContent(
-        `<p style="font-size:1.15em;line-height:1.8;">${cleanContent}</p>` +
-        `<p style="margin-top:16px;padding:16px;background:rgba(139,92,246,0.15);border-radius:12px;border-left:4px solid #8B5CF6;"><em style="color:#8B5CF6;">The original source blocked direct content extraction. Above is the summary from the RSS feed.</em></p>` +
+        `<p style="font-size:1.15em;line-height:1.8;color:rgba(255,255,255,0.9);">${cleanContent}</p>` +
         originalLink
       );
       
