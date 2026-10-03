@@ -173,23 +173,49 @@ export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {
         console.warn("Scraping failed or timed out.");
       }
 
-      // Show the content we already have + link to original source
+      // Scraper failed: Fallback to AI expansion of the summary
       const existingContent = article.content || article.summary || '';
       const cleanContent = existingContent.replace(/<[^>]*>?/gm, '').trim();
       
       const originalLink = article.link !== '#' 
         ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">
              <a href="${article.link}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 8px; background: #00F0FF; color: black; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 14px rgba(0,240,255,0.25);">
-               Read the full story on ${article.source} 
+               Read the original story on ${article.source} 
                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
              </a>
            </div>`
         : '';
 
-      setFullStoryContent(
-        `<p style="font-size:1.15em;line-height:1.8;color:rgba(255,255,255,0.9);">${cleanContent}</p>` +
-        originalLink
-      );
+      try {
+        const prompt = `You are a professional journalist. The following is a headline and brief summary of a real, current news event. The full article couldn't be scraped.
+        
+Headline: ${article.title}
+Source: ${article.source}
+Summary: ${cleanContent}
+
+TASK: Expand this into a comprehensive, well-written full news article (about 3-4 paragraphs). 
+CRITICAL RULES:
+1. Base your expansion STRICTLY on the provided summary and headline. Do NOT hallucinate names, dates, or events that are not implied by the summary.
+2. Format the response in raw HTML paragraphs (<p> tags). Do not use markdown backticks.
+3. Do not include a title (it's already displayed).
+4. Write in a neutral, journalistic tone.`;
+        
+        const expandedArticle = await askGemini(prompt);
+        // Clean up any markdown code blocks the AI might still add
+        const cleanHtml = expandedArticle.replace(/```html|```/g, '').trim();
+        
+        setFullStoryContent(
+          cleanHtml +
+          `<p style="margin-top:16px; font-size: 0.85em; color: #888; border-left: 2px solid #888; padding-left: 12px;"><em>Note: This article was expanded by AI from the original source summary because the publisher blocked full extraction.</em></p>` +
+          originalLink
+        );
+      } catch (err) {
+        // Ultimate fallback if AI also fails
+        setFullStoryContent(
+          `<p style="font-size:1.15em;line-height:1.8;color:rgba(255,255,255,0.9);">${cleanContent}</p>` +
+          originalLink
+        );
+      }
       
       setIsFullStoryLoading(false);
     }
