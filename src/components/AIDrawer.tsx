@@ -32,8 +32,16 @@ export default function AIDrawer({ isOpen, onClose, articles }: Props) {
     // Use the actual live articles passed from props to ground the AI
     const context = articles.slice(0, 15).map(a => `Source: ${a.source}\nTitle: ${a.title}\nSummary: ${a.summary}`).join('\n\n');
     
+    const aiPrompt = `User question: ${userQ}
+
+CRITICAL INSTRUCTIONS FOR YOU (SUMMER):
+1. Give a direct, punchy summary of the facts.
+2. DO NOT say "According to France 24" or "Source X says". Just tell the user what happened directly.
+3. Keep it conversational but factual. 
+4. At the very end of your message, on a new line, write: "Sources: [Name of source 1, Name of source 2]" based on the articles you used.`;
+
     try {
-      const response = await askGemini(userQ, context);
+      const response = await askGemini(aiPrompt, context);
       setMessages(prev => [...prev, { role: 'ai', text: response }]);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'ai', text: 'Server is cooked. Try again later.' }]);

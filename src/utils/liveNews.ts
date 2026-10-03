@@ -9,28 +9,40 @@ const CATEGORY_FEEDS: Record<string, string[]> = {
     'https://www.aljazeera.com/xml/rss/all.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
     'https://www.france24.com/en/rss',
+    'https://www.theguardian.com/world/rss',
+    'http://rss.cnn.com/rss/edition_world.rss',
+    'https://moxie.foxnews.com/google-publisher/world.xml',
   ],
   America: [
     'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
     'https://feeds.npr.org/1001/rss.xml',
     'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
+    'http://rss.cnn.com/rss/edition_us.rss',
+    'https://www.wsj.com/xml/rss/3_7085.xml',
+    'https://moxie.foxnews.com/google-publisher/politics.xml',
   ],
   Europe: [
     'https://www.france24.com/en/europe/rss',
     'http://feeds.bbci.co.uk/news/world/europe/rss.xml',
+    'https://www.theguardian.com/europe/rss',
   ],
   India: [
     'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
     'https://feeds.feedburner.com/ndtvnews-india-news',
+    'https://www.thehindu.com/news/national/feeder/default.rss',
   ],
   Sports: [
     'http://feeds.bbci.co.uk/sport/rss.xml',
     'https://www.espn.com/espn/rss/news',
+    'https://www.cbssports.com/rss/headlines/',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
   ],
   Tech: [
     'https://techcrunch.com/feed/',
     'https://www.theverge.com/rss/index.xml',
     'https://feeds.arstechnica.com/arstechnica/index',
+    'https://www.wired.com/feed/rss',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
   ],
 };
 
@@ -41,15 +53,16 @@ const BROAD_FEEDS = [
   'https://rss.nytimes.com/services/xml/rss/nyt/US.xml',
   'https://www.france24.com/en/rss',
   'https://feeds.npr.org/1001/rss.xml',
-  'https://feeds.npr.org/1004/rss.xml',
   'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
   'https://techcrunch.com/feed/',
   'http://feeds.bbci.co.uk/sport/rss.xml',
-  'http://feeds.bbci.co.uk/news/world/europe/rss.xml',
-  'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
-  'http://feeds.bbci.co.uk/news/world/asia/rss.xml',
   'https://www.theguardian.com/world/rss',
   'https://www.theguardian.com/us-news/rss',
+  'http://rss.cnn.com/rss/edition_world.rss',
+  'http://rss.cnn.com/rss/edition_us.rss',
+  'https://www.wsj.com/xml/rss/3_7085.xml',
+  'https://moxie.foxnews.com/google-publisher/world.xml',
+  'https://www.wired.com/feed/rss',
 ];
 
 const LEADER_KEYWORDS = [
