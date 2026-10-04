@@ -4,7 +4,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  const fallbackToAI = () => {
+  const fallbackToLogo = (finalUrl) => {
+    try {
+      if (finalUrl) {
+        const hostname = new URL(finalUrl).hostname;
+        return res.redirect(302, `https://www.google.com/s2/favicons?domain=${hostname}&sz=256`);
+      }
+    } catch(e) {}
+    
+    // Ultimate fallback if even URL parsing fails
     if (title) {
        const promptWords = title.replace(/[^a-zA-Z0-9 ]/g, '').split(' ').slice(0, 8).join(' ');
        const aiUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptWords + ' news high quality photography')}?width=800&height=500&nologo=true`;
@@ -45,10 +53,10 @@ export default async function handler(req, res) {
       // Redirect the browser to the actual image URL so the browser caches it natively
       return res.redirect(302, imageUrl);
     } else {
-      return fallbackToAI();
+      return fallbackToLogo(response.url);
     }
   } catch (error) {
     console.warn('Image proxy error:', error.message);
-    return fallbackToAI();
+    return fallbackToLogo();
   }
 }
