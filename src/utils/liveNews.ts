@@ -104,25 +104,19 @@ function isRecent(pubDate: string, maxDays: number = 7): boolean {
 // Core RSS fetcher (single feed via rss2json proxy)
 // ---------------------------------------------------------------------------
 async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: number = 7): Promise<LiveArticle[]> {
-  const urls = [
-    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
-    `https://feed2json.org/convert?url=${encodeURIComponent(rssUrl)}`
-  ];
-
-  for (const url of urls) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10000);
-      const res = await fetch(url, { signal: ctrl.signal });
-      clearTimeout(timer);
-      
-      if (!res.ok) continue;
-      
+  // 1. Try rss2json first
+  try {
+    const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(rss2jsonUrl, { signal: ctrl.signal });
+    clearTimeout(timer);
+    
+    if (res.ok) {
       const data = await res.json();
       if (data.status === 'ok' || data.items) {
         const items = data.items || [];
         const feedTitle = data.feed?.title || data.title || labelCategory;
-        
         const mapped = items
           .filter((item: any) => item.title && isRecent(item.pubDate || item.date_published || '', maxDays))
           .map((item: any, idx: number) => {
@@ -144,13 +138,85 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
               content: content || '',
             };
           });
-        
         if (mapped.length > 0) return mapped;
       }
-    } catch {
-      // try next url
+    }
+  } catch (e) {
+    // rss2json failed or rate limited
+  }
+
+  // 2. Fallback: Fetch raw XML via CORS proxies and parse manually
+  const rawProxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
+    `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`
+  ];
+
+  for (const proxy of rawProxies) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(proxy, { signal: ctrl.signal });
+      clearTimeout(timer);
+      
+      if (!res.ok) continue;
+      
+      const xmlText = await res.text();
+      if (!xmlText.includes('<rss') && !xmlText.includes('<feed')) continue;
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, 'text/xml');
+      
+      const feedTitle = doc.querySelector('channel > title, feed > title')?.textContent || labelCategory;
+      const items = Array.from(doc.querySelectorAll('item, entry'));
+      
+      const mapped = items.map((el, idx) => {
+        const title = el.querySelector('title')?.textContent || '';
+        let link = el.querySelector('link')?.textContent || '';
+        if (!link) {
+          const linkEl = el.querySelector('link');
+          if (linkEl) link = linkEl.getAttribute('href') || '';
+        }
+        
+        const pubDate = el.querySelector('pubDate, published, updated')?.textContent || '';
+        const description = el.querySelector('description, summary, content')?.textContent || '';
+        
+        let rawImg = '';
+        const enclosure = el.querySelector('enclosure[type^="image"]');
+        if (enclosure) rawImg = enclosure.getAttribute('url') || '';
+        
+        if (!rawImg) {
+          const media = el.getElementsByTagName('media:content')[0];
+          if (media) rawImg = media.getAttribute('url') || '';
+        }
+        if (!rawImg) {
+          const thumb = el.getElementsByTagName('media:thumbnail')[0];
+          if (thumb) rawImg = thumb.getAttribute('url') || '';
+        }
+        if (!rawImg) {
+          rawImg = `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/800/500`;
+        }
+
+        const optimizedImg = `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
+
+        return {
+          id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
+          title: title.trim(),
+          link: link.trim(),
+          pubDate: pubDate,
+          source: feedTitle.trim(),
+          image: optimizedImg,
+          summary: description.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
+          content: description || '',
+        };
+      }).filter(item => item.title && isRecent(item.pubDate, maxDays));
+
+      if (mapped.length > 0) return mapped;
+    } catch (e) {
+      // try next proxy
     }
   }
+
   return [];
 }
 
