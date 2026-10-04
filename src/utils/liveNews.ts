@@ -159,22 +159,29 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
 
   // 2. Fallback: Fetch raw XML via CORS proxies and parse manually
   const rawProxies = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
-    `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`
+    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`, type: 'json' },
+    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`, type: 'text' },
+    { url: `https://thingproxy.freeboard.io/fetch/${rssUrl}`, type: 'text' }
   ];
 
   for (const proxy of rawProxies) {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(proxy, { signal: ctrl.signal });
+      const res = await fetch(proxy.url, { signal: ctrl.signal });
       clearTimeout(timer);
       
       if (!res.ok) continue;
       
-      const xmlText = await res.text();
-      if (!xmlText.includes('<rss') && !xmlText.includes('<feed')) continue;
+      let xmlText = '';
+      if (proxy.type === 'json') {
+        const data = await res.json();
+        xmlText = data.contents;
+      } else {
+        xmlText = await res.text();
+      }
+
+      if (!xmlText || (!xmlText.includes('<rss') && !xmlText.includes('<feed'))) continue;
 
       const parser = new DOMParser();
       const doc = parser.parseFromString(xmlText, 'text/xml');
