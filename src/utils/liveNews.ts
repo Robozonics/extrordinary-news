@@ -427,35 +427,7 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
       );
     }
 
-    // ── CM Vijay ───────────────────────────────────────────────────────────
-    if (category === 'CM Vijay') {
-      // Fetch Tamil feeds and Google News in parallel — don't wait for one to finish
-      const [tamilAll, gnewsResults] = await Promise.all([
-        fetchFeeds(TAMIL_FEEDS, 'Tamil News', 5),
-        searchGoogleNews('Tamilnadu CM Vijay', 5).catch(() => [] as LiveArticle[])
-      ]);
 
-      const keywords = ['விஜய்', 'vijay', 'tvk', 'தமிழக', 'முதல்வர்', 'cm ', 'chief minister'];
-      const tamilFiltered = tamilAll.filter(a => {
-        const text = (a.title + ' ' + a.summary).toLowerCase();
-        return keywords.some(k => text.includes(k));
-      });
-
-      // Tamil feeds first, then Google News results
-      const combined = [...tamilFiltered, ...gnewsResults];
-      
-      // If we got enough from Tamil feeds alone, return immediately
-      if (combined.length >= 3) {
-        return shuffle(combined).slice(0, 15);
-      }
-      
-      // If very few results, just return all Tamil news (unfiltered) as fallback
-      if (tamilAll.length > 0) {
-        return shuffle(tamilAll).slice(0, 15);
-      }
-
-      return combined.slice(0, 15);
-    }
 
     // ── India ──────────────────────────────────────────────────────────────
     if (category === 'India') {
@@ -532,7 +504,6 @@ export async function scrapeFullArticle(url: string): Promise<string> {
         if (res2.ok) html = await res2.text();
       } catch {}
     }
-
     if (!html || html.includes('Cloudflare') || html.includes('captcha')) {
       return 'The news source is heavily protected (Cloudflare/Paywall). Cannot extract full article.';
     }
@@ -561,4 +532,20 @@ export async function scrapeFullArticle(url: string): Promise<string> {
     console.error(e);
     return 'Error fetching the full story from the original source.';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Reverse Geocoding
+// ---------------------------------------------------------------------------
+export async function getCityName(lat: number, lon: number): Promise<string> {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.address.city || data.address.town || data.address.village || data.address.county || data.address.state || "Local Area";
+    }
+  } catch (e) {
+    console.error("Reverse geocode failed", e);
+  }
+  return "Local Area";
 }

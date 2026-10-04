@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchLiveNews } from '../utils/liveNews';
+import { fetchLiveNews, getCityName } from '../utils/liveNews';
 import type { LiveArticle } from '../utils/liveNews';
 import { MapPin, RefreshCw, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 
@@ -53,8 +53,9 @@ export default function BroadsheetMode() {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject);
         });
-        localQuery = `news near ${pos.coords.latitude},${pos.coords.longitude}`;
-        setLocationName("Your Local Edition");
+        const cityName = await getCityName(pos.coords.latitude, pos.coords.longitude);
+        localQuery = `${cityName} news`;
+        setLocationName(cityName);
       } catch (e) {
         console.warn("Location denied");
       }

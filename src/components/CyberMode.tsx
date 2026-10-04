@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchLiveNews, scrapeFullArticle } from '../utils/liveNews';
+import { fetchLiveNews, scrapeFullArticle, getCityName } from '../utils/liveNews';
 import type { LiveArticle } from '../utils/liveNews';
 import { translateWithGemini, factCheckWithGemini, askGemini } from '../utils/gemini';
 import ShareMenu from './ShareMenu';
@@ -12,7 +12,7 @@ interface Props {
   onArticlesUpdate?: (articles: LiveArticle[]) => void;
 }
 
-const CATEGORIES = ['World', 'India', 'Leaders', 'Local', 'Blind Spot', 'Tech', 'America', 'Europe', 'Sports', 'CM Vijay'] as const;
+const CATEGORIES = ['World', 'India', 'Leaders', 'Local', 'Blind Spot', 'Tech', 'America', 'Europe', 'Sports'] as const;
 type Category = typeof CATEGORIES[number];
 
 export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {
@@ -61,7 +61,8 @@ export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {
     if (cat === 'Local' && !query) {
       if ('geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(async (pos) => {
-          const locQuery = `news near ${pos.coords.latitude},${pos.coords.longitude}`;
+          const cityName = await getCityName(pos.coords.latitude, pos.coords.longitude);
+          const locQuery = `${cityName} news`;
           const data = await fetchLiveNews(fetchCat, locQuery);
           setArticles(data);
           setLoading(false);
