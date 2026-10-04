@@ -457,6 +457,36 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
       return combined.slice(0, 15);
     }
 
+    // ── India ──────────────────────────────────────────────────────────────
+    if (category === 'India') {
+      const INDIA_KEYWORDS = [
+        'india', 'indian', 'delhi', 'mumbai', 'chennai', 'kolkata', 'bangalore',
+        'bengaluru', 'hyderabad', 'pune', 'modi', 'bjp', 'congress', 'aap',
+        'lok sabha', 'rajya sabha', 'parliament', 'supreme court', 'niti aayog',
+        'rupee', 'sensex', 'nifty', 'rbi', 'isro', 'crore', 'lakh',
+        'tamil nadu', 'kerala', 'karnataka', 'maharashtra', 'uttar pradesh',
+        'rajasthan', 'gujarat', 'bihar', 'west bengal', 'andhra', 'telangana',
+        'jammu', 'kashmir', 'punjab', 'haryana', 'assam', 'odisha', 'goa',
+      ];
+
+      // Fetch India RSS feeds and Google News in parallel
+      const [indiaRss, gnews] = await Promise.all([
+        fetchFeeds(CATEGORY_FEEDS['India'] || [], 'India'),
+        searchGoogleNews('India news today').catch(() => [] as LiveArticle[])
+      ]);
+
+      // Filter to only India-related articles
+      const allArticles = [...indiaRss, ...gnews];
+      const indiaOnly = allArticles.filter(a => {
+        const text = (a.title + ' ' + a.summary).toLowerCase();
+        return INDIA_KEYWORDS.some(kw => text.includes(kw));
+      });
+
+      if (indiaOnly.length >= 5) return shuffle(indiaOnly).slice(0, 15);
+      // If keyword filtering was too aggressive, return all from India feeds
+      return shuffle(indiaRss).slice(0, 15);
+    }
+
     // ── Local ──────────────────────────────────────────────────────────────
     if (category === 'Local') {
       // Use Google News for local/India news
