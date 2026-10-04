@@ -274,11 +274,6 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
       `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
       true, labelCategory, maxDays, raceCtrl.signal
     ),
-    // thingproxy (raw)
-    fetchViaProxy(
-      `https://thingproxy.freeboard.io/fetch/${rssUrl}`,
-      false, labelCategory, maxDays, raceCtrl.signal
-    ),
     // codetabs (raw)
     fetchViaProxy(
       `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
@@ -312,8 +307,12 @@ async function searchGoogleNews(query: string, maxDays: number = 7): Promise<Liv
   // Also try Bing News RSS as backup
   const bingUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
   const bingArticles = await fetchOneFeed(bingUrl, 'Bing News', maxDays);
+  
+  // Try Yahoo News as a tertiary backup
+  const yahooUrl = `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`;
+  const yahooArticles = await fetchOneFeed(yahooUrl, 'Yahoo News', maxDays);
 
-  const all = [...articles, ...bingArticles];
+  const all = [...articles, ...bingArticles, ...yahooArticles];
 
   // Deduplicate by title similarity
   const seen = new Set<string>();
@@ -400,7 +399,7 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
   try {
     // ── Search query → Use Google News RSS (returns REAL current articles) ──
     if (query) {
-      // 1. Search Google News + Bing News for the exact query
+      // 1. Search Google News + Bing News + Yahoo for the exact query
       const searchResults = await searchGoogleNews(query);
 
       if (searchResults.length > 0) {
@@ -408,18 +407,30 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
         return searchResults.slice(0, 15);
       }
 
-      // 2. If Google/Bing returned nothing, try broad feeds + keyword filter
-      console.warn(`⚠️ Google News returned 0 results for "${query}", trying broad feeds...`);
-      const broadAll = await fetchFeeds(BROAD_FEEDS, 'News');
+      console.warn(`⚠️ Search returned 0 results for "${query}", using category fallbacks...`);
+      
       const kw = query.toLowerCase().split(' ').filter(w => w.length > 2);
+
+      // 2. If it was a Local search, fallback to India feeds first
+      if (category === 'Local') {
+        const indiaArticles = await fetchFeeds(CATEGORY_FEEDS['India'] || [], 'India');
+        const matched = indiaArticles.filter(a => {
+          const text = (a.title + ' ' + a.summary).toLowerCase();
+          return kw.some(w => text.includes(w));
+        });
+        if (matched.length > 0) return shuffle(matched).slice(0, 10);
+        return shuffle(indiaArticles).slice(0, 10);
+      }
+
+      // 3. Otherwise try broad feeds + keyword filter
+      const broadAll = await fetchFeeds(BROAD_FEEDS, 'News');
       const matched = broadAll.filter(a => {
         const text = (a.title + ' ' + a.summary).toLowerCase();
         return kw.some(w => text.includes(w));
       });
       if (matched.length > 0) return shuffle(matched).slice(0, 10);
 
-      // 3. Last resort: return broad news with a console warning
-      console.warn(`⚠️ No articles found matching "${query}" in any source`);
+      // 4. Last resort: return broad news
       return shuffle(broadAll).slice(0, 10);
     }
 
