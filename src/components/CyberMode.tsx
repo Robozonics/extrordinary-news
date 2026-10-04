@@ -55,30 +55,46 @@ export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {
   const [podcastLoading, setPodcastLoading] = useState(false);
 
   const loadNews = async (cat: Category, query?: string) => {
-    setLoading(true);
     let fetchCat = cat.toString();
     
+    let activeQuery = query;
+    if (cat === 'Local' && !query) {
+      const lastCity = localStorage.getItem('last_city');
+      if (lastCity) activeQuery = `${lastCity} news`;
+    }
+
+    const cacheKey = `cyber_cache_${fetchCat}_${activeQuery || ''}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) setArticles(JSON.parse(cached));
+      else setLoading(true);
+    } catch(e) {}
+
+    const fetchAndSet = async (q?: string) => {
+      const data = await fetchLiveNews(fetchCat, q);
+      setArticles(data);
+      if (onArticlesUpdate) onArticlesUpdate(data);
+      localStorage.setItem(`cyber_cache_${fetchCat}_${q || ''}`, JSON.stringify(data));
+      setLoading(false);
+    };
+
     if (cat === 'Local' && !query) {
       if ('geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(async (pos) => {
           const cityName = await getCityName(pos.coords.latitude, pos.coords.longitude);
-          const locQuery = `${cityName} news`;
-          const data = await fetchLiveNews(fetchCat, locQuery);
-          setArticles(data);
-          setLoading(false);
+          localStorage.setItem('last_city', cityName);
+          await fetchAndSet(`${cityName} news`);
         }, async () => {
-          const data = await fetchLiveNews('Local', 'Local News India');
-          setArticles(data);
-          setLoading(false);
+          await fetchAndSet('Local News India');
         });
+        return;
+      } else {
+        await fetchAndSet('Local News India');
         return;
       }
     }
 
-    const data = await fetchLiveNews(fetchCat, query);
-    setArticles(data);
-    if (onArticlesUpdate) onArticlesUpdate(data);
-    setLoading(false);
+    await fetchAndSet(activeQuery);
   };
 
   useEffect(() => {

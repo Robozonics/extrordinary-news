@@ -42,62 +42,82 @@ export default function BroadsheetMode() {
     touchStartY.current = null;
   };
 
-  const pageOrder = ['Front Page', 'India', 'Global Leaders', 'CM Vijay', 'Local News', 'World News', 'Technology', 'Sports'];
+  const pageOrder = ['Front Page', 'India', 'Global Leaders', 'Local News', 'World News', 'Technology', 'Sports'];
 
   const loadPaper = async () => {
     setLoading(true);
     
-    let localQuery = "Local News";
-    if ('geolocation' in navigator) {
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        const cityName = await getCityName(pos.coords.latitude, pos.coords.longitude);
-        localQuery = `${cityName} news`;
-        setLocationName(cityName);
-      } catch (e) {
-        console.warn("Location denied");
+    let cachedPages = null;
+    try {
+      const cached = localStorage.getItem('broadsheet_cache');
+      if (cached) {
+        cachedPages = JSON.parse(cached);
+        setPages(cachedPages);
+      } else {
+        setLoading(true);
       }
-    }
+    } catch(e){}
 
-    const [india, loc, wrld, tech, spt, leaders, vijay] = await Promise.all([
-      fetchLiveNews("India"),
-      fetchLiveNews("Local", localQuery),
-      fetchLiveNews("World"),
-      fetchLiveNews("Tech"),
-      fetchLiveNews("Sports"),
-      fetchLiveNews("Leaders"),
-      fetchLiveNews("CM Vijay")
-    ]);
+    const fetchAndSetAll = async (locQ: string) => {
+      const [india, loc, wrld, tech, spt, leaders] = await Promise.all([
+        fetchLiveNews("India"),
+        fetchLiveNews("Local", locQ),
+        fetchLiveNews("World"),
+        fetchLiveNews("Tech"),
+        fetchLiveNews("Sports"),
+        fetchLiveNews("Leaders")
+      ]);
 
-    const getTodayTop = (articles: LiveArticle[]) => {
-      return articles.find(a => {
-        const pub = new Date(a.pubDate).getTime();
-        return !isNaN(pub) && Date.now() - pub <= 24 * 60 * 60 * 1000;
-      });
+      const getTodayTop = (articles: LiveArticle[]) => {
+        return articles.find(a => {
+          const pub = new Date(a.timestamp || a.pubDate).getTime();
+          return !isNaN(pub) && Date.now() - pub <= 24 * 60 * 60 * 1000;
+        });
+      };
+
+      const fpIndia = getTodayTop(india);
+      const fpLeaders = getTodayTop(leaders);
+      const fpWrld = getTodayTop(wrld);
+      const fpLoc = getTodayTop(loc);
+      const fpTech = getTodayTop(tech);
+      const fpSpt = getTodayTop(spt);
+
+      const newPages = {
+        'Front Page': [fpIndia, fpLeaders, fpWrld, fpLoc, fpTech, fpSpt].filter(Boolean) as LiveArticle[],
+        'India': india.filter(a => a !== fpIndia),
+        'Global Leaders': leaders.filter(a => a !== fpLeaders),
+        'Local News': loc.filter(a => a !== fpLoc),
+        'World News': wrld.filter(a => a !== fpWrld),
+        'Technology': tech.filter(a => a !== fpTech),
+        'Sports': spt.filter(a => a !== fpSpt)
+      };
+
+      setPages(newPages);
+      localStorage.setItem('broadsheet_cache', JSON.stringify(newPages));
+      setLoading(false);
     };
 
-    const fpVijay = getTodayTop(vijay);
-    const fpIndia = getTodayTop(india);
-    const fpLeaders = getTodayTop(leaders);
-    const fpWrld = getTodayTop(wrld);
-    const fpLoc = getTodayTop(loc);
-    const fpTech = getTodayTop(tech);
-    const fpSpt = getTodayTop(spt);
+    let localQuery = "Local News";
+    const lastCity = localStorage.getItem('last_city');
+    if (lastCity) {
+      localQuery = `${lastCity} news`;
+      setLocationName(lastCity);
+    }
 
-    setPages({
-      'Front Page': [fpVijay, fpIndia, fpLeaders, fpWrld, fpLoc, fpTech, fpSpt].filter(Boolean) as LiveArticle[],
-      'India': india.filter(a => a !== fpIndia),
-      'Global Leaders': leaders.filter(a => a !== fpLeaders),
-      'CM Vijay': vijay.filter(a => a !== fpVijay),
-      'Local News': loc.filter(a => a !== fpLoc),
-      'World News': wrld.filter(a => a !== fpWrld),
-      'Technology': tech.filter(a => a !== fpTech),
-      'Sports': spt.filter(a => a !== fpSpt)
-    });
-    
-    setLoading(false);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const cityName = await getCityName(pos.coords.latitude, pos.coords.longitude);
+        localStorage.setItem('last_city', cityName);
+        setLocationName(cityName);
+        await fetchAndSetAll(`${cityName} news`);
+      }, async () => {
+        console.warn("Location denied");
+        await fetchAndSetAll(localQuery);
+      });
+      return;
+    }
+
+    await fetchAndSetAll(localQuery);
   };
 
   useEffect(() => {
