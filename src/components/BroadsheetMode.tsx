@@ -42,7 +42,7 @@ export default function BroadsheetMode() {
     touchStartY.current = null;
   };
 
-  const pageOrder = ['Front Page', 'Global Leaders', 'CM Vijay', 'National News', 'Local News', 'World News', 'Technology', 'Sports'];
+  const pageOrder = ['Front Page', 'India', 'Global Leaders', 'CM Vijay', 'Local News', 'World News', 'Technology', 'Sports'];
 
   const loadPaper = async () => {
     setLoading(true);
@@ -60,7 +60,7 @@ export default function BroadsheetMode() {
       }
     }
 
-    const [nat, loc, wrld, tech, spt, leaders, vijay] = await Promise.all([
+    const [india, loc, wrld, tech, spt, leaders, vijay] = await Promise.all([
       fetchLiveNews("India"),
       fetchLiveNews("Local", localQuery),
       fetchLiveNews("World"),
@@ -78,7 +78,7 @@ export default function BroadsheetMode() {
     };
 
     const fpVijay = getTodayTop(vijay);
-    const fpNat = getTodayTop(nat);
+    const fpIndia = getTodayTop(india);
     const fpLeaders = getTodayTop(leaders);
     const fpWrld = getTodayTop(wrld);
     const fpLoc = getTodayTop(loc);
@@ -86,10 +86,10 @@ export default function BroadsheetMode() {
     const fpSpt = getTodayTop(spt);
 
     setPages({
-      'Front Page': [fpVijay, fpNat, fpLeaders, fpWrld, fpLoc, fpTech, fpSpt].filter(Boolean) as LiveArticle[],
+      'Front Page': [fpVijay, fpIndia, fpLeaders, fpWrld, fpLoc, fpTech, fpSpt].filter(Boolean) as LiveArticle[],
+      'India': india.filter(a => a !== fpIndia),
       'Global Leaders': leaders.filter(a => a !== fpLeaders),
       'CM Vijay': vijay.filter(a => a !== fpVijay),
-      'National News': nat.filter(a => a !== fpNat),
       'Local News': loc.filter(a => a !== fpLoc),
       'World News': wrld.filter(a => a !== fpWrld),
       'Technology': tech.filter(a => a !== fpTech),
