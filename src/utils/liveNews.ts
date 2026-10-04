@@ -113,20 +113,121 @@ function isRecent(pubDate: string, maxDays: number = 7): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Core RSS fetcher (single feed via rss2json proxy)
+// In-memory feed cache (avoids duplicate requests within same session)
+// ---------------------------------------------------------------------------
+const feedCache = new Map<string, { data: LiveArticle[]; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// ---------------------------------------------------------------------------
+// Parse raw RSS/Atom XML into LiveArticle[]
+// ---------------------------------------------------------------------------
+function parseXmlFeed(xmlText: string, labelCategory: string, maxDays: number): LiveArticle[] {
+  if (!xmlText || (!xmlText.includes('<rss') && !xmlText.includes('<feed'))) return [];
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  
+  const feedTitle = doc.querySelector('channel > title, feed > title')?.textContent || labelCategory;
+  const items = Array.from(doc.querySelectorAll('item, entry'));
+  
+  return items.map((el, idx) => {
+    const title = el.querySelector('title')?.textContent || '';
+    let link = el.querySelector('link')?.textContent || '';
+    if (!link) {
+      const linkEl = el.querySelector('link');
+      if (linkEl) link = linkEl.getAttribute('href') || '';
+    }
+    
+    const pubDate = el.querySelector('pubDate, published, updated')?.textContent || '';
+    const description = el.querySelector('description, summary, content')?.textContent || '';
+    
+    let rawImg = '';
+    const enclosure = el.querySelector('enclosure[type^="image"]');
+    if (enclosure) rawImg = enclosure.getAttribute('url') || '';
+    if (!rawImg) {
+      const media = el.getElementsByTagName('media:content')[0];
+      if (media) rawImg = media.getAttribute('url') || '';
+    }
+    if (!rawImg) {
+      const thumb = el.getElementsByTagName('media:thumbnail')[0];
+      if (thumb) rawImg = thumb.getAttribute('url') || '';
+    }
+    if (!rawImg) {
+      rawImg = `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/800/500`;
+    }
+
+    const optimizedImg = `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
+
+    return {
+      id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
+      title: title.trim(),
+      link: link.trim(),
+      pubDate,
+      source: feedTitle.trim(),
+      image: optimizedImg,
+      summary: description.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
+      content: description || '',
+    };
+  }).filter(item => item.title && isRecent(item.pubDate, maxDays));
+}
+
+// ---------------------------------------------------------------------------
+// Single proxy fetch helper (returns articles or throws)
+// ---------------------------------------------------------------------------
+async function fetchViaProxy(
+  proxyUrl: string, 
+  isJson: boolean, 
+  labelCategory: string, 
+  maxDays: number
+): Promise<LiveArticle[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const res = await fetch(proxyUrl, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`${res.status}`);
+    
+    let xmlText: string;
+    if (isJson) {
+      const data = await res.json();
+      xmlText = data.contents;
+    } else {
+      xmlText = await res.text();
+    }
+
+    const articles = parseXmlFeed(xmlText, labelCategory, maxDays);
+    if (articles.length === 0) throw new Error('No articles parsed');
+    return articles;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Core RSS fetcher — races ALL proxies in parallel for maximum speed
 // ---------------------------------------------------------------------------
 async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: number = 7): Promise<LiveArticle[]> {
-  // 1. Try rss2json first
-  try {
-    const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(rss2jsonUrl, { signal: ctrl.signal });
-    clearTimeout(timer);
-    
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === 'ok' || data.items) {
+  // Check cache first
+  const cacheKey = `${rssUrl}|${maxDays}`;
+  const cached = feedCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data;
+  }
+
+  // Build all proxy attempts
+  const attempts: Promise<LiveArticle[]>[] = [
+    // rss2json (JSON API)
+    (async () => {
+      const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json();
+        if (data.status !== 'ok' && !data.items) throw new Error('bad response');
         const items = data.items || [];
         const feedTitle = data.feed?.title || data.title || labelCategory;
         const mapped = items
@@ -138,105 +239,43 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
             const content = item.content || item.content_text || description;
             const rawImg = item.enclosure?.link || item.thumbnail || item.image || `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/800/500`;
             const optimizedImg = `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
-            
             return {
               id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
               title: item.title.trim(),
-              link: link,
-              pubDate: pubDate,
-              source: feedTitle,
+              link, pubDate, source: feedTitle,
               image: optimizedImg,
               summary: description.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
               content: content || '',
             };
           });
-        if (mapped.length > 0) return mapped;
-      }
-    }
-  } catch (e) {
-    // rss2json failed or rate limited
-  }
-
-  // 2. Fallback: Fetch raw XML via CORS proxies and parse manually
-  const rawProxies = [
-    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`, type: 'json' },
-    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`, type: 'text' },
-    { url: `https://thingproxy.freeboard.io/fetch/${rssUrl}`, type: 'text' }
+        if (mapped.length === 0) throw new Error('No articles');
+        return mapped;
+      } catch (e) { clearTimeout(timer); throw e; }
+    })(),
+    // allorigins (JSON wrapper)
+    fetchViaProxy(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
+      true, labelCategory, maxDays
+    ),
+    // thingproxy (raw)
+    fetchViaProxy(
+      `https://thingproxy.freeboard.io/fetch/${rssUrl}`,
+      false, labelCategory, maxDays
+    ),
+    // codetabs (raw)
+    fetchViaProxy(
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
+      false, labelCategory, maxDays
+    ),
   ];
 
-  for (const proxy of rawProxies) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(proxy.url, { signal: ctrl.signal });
-      clearTimeout(timer);
-      
-      if (!res.ok) continue;
-      
-      let xmlText = '';
-      if (proxy.type === 'json') {
-        const data = await res.json();
-        xmlText = data.contents;
-      } else {
-        xmlText = await res.text();
-      }
-
-      if (!xmlText || (!xmlText.includes('<rss') && !xmlText.includes('<feed'))) continue;
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(xmlText, 'text/xml');
-      
-      const feedTitle = doc.querySelector('channel > title, feed > title')?.textContent || labelCategory;
-      const items = Array.from(doc.querySelectorAll('item, entry'));
-      
-      const mapped = items.map((el, idx) => {
-        const title = el.querySelector('title')?.textContent || '';
-        let link = el.querySelector('link')?.textContent || '';
-        if (!link) {
-          const linkEl = el.querySelector('link');
-          if (linkEl) link = linkEl.getAttribute('href') || '';
-        }
-        
-        const pubDate = el.querySelector('pubDate, published, updated')?.textContent || '';
-        const description = el.querySelector('description, summary, content')?.textContent || '';
-        
-        let rawImg = '';
-        const enclosure = el.querySelector('enclosure[type^="image"]');
-        if (enclosure) rawImg = enclosure.getAttribute('url') || '';
-        
-        if (!rawImg) {
-          const media = el.getElementsByTagName('media:content')[0];
-          if (media) rawImg = media.getAttribute('url') || '';
-        }
-        if (!rawImg) {
-          const thumb = el.getElementsByTagName('media:thumbnail')[0];
-          if (thumb) rawImg = thumb.getAttribute('url') || '';
-        }
-        if (!rawImg) {
-          rawImg = `https://picsum.photos/seed/${encodeURIComponent(labelCategory + idx)}/800/500`;
-        }
-
-        const optimizedImg = `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
-
-        return {
-          id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
-          title: title.trim(),
-          link: link.trim(),
-          pubDate: pubDate,
-          source: feedTitle.trim(),
-          image: optimizedImg,
-          summary: description.replace(/<[^>]*>?/gm, '').substring(0, 220).trim() + '...' || '',
-          content: description || '',
-        };
-      }).filter(item => item.title && isRecent(item.pubDate, maxDays));
-
-      if (mapped.length > 0) return mapped;
-    } catch (e) {
-      // try next proxy
-    }
+  try {
+    const result = await Promise.any(attempts);
+    feedCache.set(cacheKey, { data: result, ts: Date.now() });
+    return result;
+  } catch {
+    return [];
   }
-
-  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -390,23 +429,32 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
 
     // ── CM Vijay ───────────────────────────────────────────────────────────
     if (category === 'CM Vijay') {
-      const gnewsResults = await searchGoogleNews('Tamilnadu CM Vijay', 5);
-      
-      const tamilAll = await fetchFeeds(TAMIL_FEEDS, 'Tamil News', 5);
-      const keywords = ['விஜய்', 'vijay', 'tvk', 'தமிழக', 'முதல்வர்'];
+      // Fetch Tamil feeds and Google News in parallel — don't wait for one to finish
+      const [tamilAll, gnewsResults] = await Promise.all([
+        fetchFeeds(TAMIL_FEEDS, 'Tamil News', 5),
+        searchGoogleNews('Tamilnadu CM Vijay', 5).catch(() => [] as LiveArticle[])
+      ]);
+
+      const keywords = ['விஜய்', 'vijay', 'tvk', 'தமிழக', 'முதல்வர்', 'cm ', 'chief minister'];
       const tamilFiltered = tamilAll.filter(a => {
         const text = (a.title + ' ' + a.summary).toLowerCase();
         return keywords.some(k => text.includes(k));
       });
 
-      const combined = [...gnewsResults, ...tamilFiltered];
+      // Tamil feeds first, then Google News results
+      const combined = [...tamilFiltered, ...gnewsResults];
       
-      if (combined.length < 3) {
-         const tamilGNews = await searchGoogleNews('தமிழக முதல்வர் விஜய்', 5);
-         return shuffle([...combined, ...tamilGNews]).slice(0, 15);
+      // If we got enough from Tamil feeds alone, return immediately
+      if (combined.length >= 3) {
+        return shuffle(combined).slice(0, 15);
       }
       
-      return shuffle(combined).slice(0, 15);
+      // If very few results, just return all Tamil news (unfiltered) as fallback
+      if (tamilAll.length > 0) {
+        return shuffle(tamilAll).slice(0, 15);
+      }
+
+      return combined.slice(0, 15);
     }
 
     // ── Local ──────────────────────────────────────────────────────────────
