@@ -178,13 +178,19 @@ async function fetchViaProxy(
   proxyUrl: string, 
   isJson: boolean, 
   labelCategory: string, 
-  maxDays: number
+  maxDays: number,
+  sharedSignal: AbortSignal
 ): Promise<LiveArticle[]> {
   const ctrl = new AbortController();
+  // If the shared signal aborts, abort our internal controller too
+  const onSharedAbort = () => ctrl.abort();
+  sharedSignal.addEventListener('abort', onSharedAbort);
+  
   const timer = setTimeout(() => ctrl.abort(), 4000);
   try {
     const res = await fetch(proxyUrl, { signal: ctrl.signal });
     clearTimeout(timer);
+    sharedSignal.removeEventListener('abort', onSharedAbort);
     if (!res.ok) throw new Error(`${res.status}`);
     
     let xmlText: string;
@@ -215,16 +221,23 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
     return cached.data;
   }
 
+  // Shared abort controller to cancel losing proxies when one wins
+  const raceCtrl = new AbortController();
+
   // Build all proxy attempts
   const attempts: Promise<LiveArticle[]>[] = [
     // rss2json (JSON API)
     (async () => {
       const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
       const ctrl = new AbortController();
+      const onSharedAbort = () => ctrl.abort();
+      raceCtrl.signal.addEventListener('abort', onSharedAbort);
+      
       const timer = setTimeout(() => ctrl.abort(), 4000);
       try {
         const res = await fetch(url, { signal: ctrl.signal });
         clearTimeout(timer);
+        raceCtrl.signal.removeEventListener('abort', onSharedAbort);
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
         if (data.status !== 'ok' && !data.items) throw new Error('bad response');
@@ -250,30 +263,36 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
           });
         if (mapped.length === 0) throw new Error('No articles');
         return mapped;
-      } catch (e) { clearTimeout(timer); throw e; }
+      } catch (e) { 
+        clearTimeout(timer); 
+        raceCtrl.signal.removeEventListener('abort', onSharedAbort);
+        throw e; 
+      }
     })(),
     // allorigins (JSON wrapper)
     fetchViaProxy(
       `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
-      true, labelCategory, maxDays
+      true, labelCategory, maxDays, raceCtrl.signal
     ),
     // thingproxy (raw)
     fetchViaProxy(
       `https://thingproxy.freeboard.io/fetch/${rssUrl}`,
-      false, labelCategory, maxDays
+      false, labelCategory, maxDays, raceCtrl.signal
     ),
     // codetabs (raw)
     fetchViaProxy(
       `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`,
-      false, labelCategory, maxDays
+      false, labelCategory, maxDays, raceCtrl.signal
     ),
   ];
 
   try {
     const result = await Promise.any(attempts);
+    raceCtrl.abort(); // Cancel the losing proxies immediately to free up browser connections
     feedCache.set(cacheKey, { data: result, ts: Date.now() });
     return result;
   } catch {
+    raceCtrl.abort();
     return [];
   }
 }
@@ -306,10 +325,20 @@ async function searchGoogleNews(query: string, maxDays: number = 7): Promise<Liv
   });
 }
 
-/** Fetch many feeds in parallel, deduplicate */
+/** Fetch feeds efficiently (only 3 at a time to prevent rate limits and browser stalling) */
 async function fetchFeeds(urls: string[], label: string, maxDays: number = 7): Promise<LiveArticle[]> {
-  const results = await Promise.all(urls.map(u => fetchOneFeed(u, label, maxDays)));
-  const flat = results.flat();
+  const randomized = shuffle([...urls]);
+  const subset = randomized.slice(0, 3);
+  let results = await Promise.all(subset.map(u => fetchOneFeed(u, label, maxDays)));
+  let flat = results.flat();
+  
+  // If we got very few articles (proxies failed), try a few more as fallback
+  if (flat.length < 5 && randomized.length > 3) {
+    const subset2 = randomized.slice(3, 6);
+    const results2 = await Promise.all(subset2.map(u => fetchOneFeed(u, label, maxDays)));
+    flat = [...flat, ...results2.flat()];
+  }
+
   const seen = new Set<string>();
   return flat.filter(a => {
     const key = a.title.toLowerCase().slice(0, 60);
