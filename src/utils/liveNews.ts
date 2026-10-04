@@ -95,15 +95,15 @@ function shuffle<T>(arr: T[]): T[] {
   return arr;
 }
 
-function isRecent(pubDate: string): boolean {
+function isRecent(pubDate: string, maxDays: number = 7): boolean {
   const t = new Date(pubDate).getTime();
-  return isNaN(t) || Date.now() - t <= ONE_WEEK_MS;
+  return isNaN(t) || Date.now() - t <= maxDays * 24 * 60 * 60 * 1000;
 }
 
 // ---------------------------------------------------------------------------
 // Core RSS fetcher (single feed via rss2json proxy)
 // ---------------------------------------------------------------------------
-async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<LiveArticle[]> {
+async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: number = 7): Promise<LiveArticle[]> {
   const urls = [
     `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
     `https://feed2json.org/convert?url=${encodeURIComponent(rssUrl)}`
@@ -124,7 +124,7 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<Live
         const feedTitle = data.feed?.title || data.title || labelCategory;
         
         const mapped = items
-          .filter((item: any) => item.title && isRecent(item.pubDate || item.date_published || ''))
+          .filter((item: any) => item.title && isRecent(item.pubDate || item.date_published || '', maxDays))
           .map((item: any, idx: number) => {
             const pubDate = item.pubDate || item.date_published || '';
             const link = item.link || item.url || '#';
@@ -159,16 +159,16 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string): Promise<Live
 // URL format: https://news.google.com/rss/search?q=QUERY&hl=en&gl=US&ceid=US:en
 // This is a free, public RSS feed — no API key needed.
 // ---------------------------------------------------------------------------
-async function searchGoogleNews(query: string): Promise<LiveArticle[]> {
-  // Google News RSS for the query (when=7d restricts to last 7 days)
-  const gnewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' when:7d')}&hl=en&gl=US&ceid=US:en`;
+async function searchGoogleNews(query: string, maxDays: number = 7): Promise<LiveArticle[]> {
+  // Google News RSS for the query
+  const gnewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ` when:${maxDays}d`)}&hl=en&gl=US&ceid=US:en`;
   console.info(`🔍 Searching Google News RSS for: "${query}"`);
 
-  const articles = await fetchOneFeed(gnewsUrl, 'Google News');
+  const articles = await fetchOneFeed(gnewsUrl, 'Google News', maxDays);
 
   // Also try Bing News RSS as backup
   const bingUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
-  const bingArticles = await fetchOneFeed(bingUrl, 'Bing News');
+  const bingArticles = await fetchOneFeed(bingUrl, 'Bing News', maxDays);
 
   const all = [...articles, ...bingArticles];
 
@@ -301,6 +301,15 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
         'Select articles that are critically important but appear to be UNDERREPORTED — stories that deserve more attention, "blind spots" in mainstream coverage, or overlooked global crises.',
         8
       );
+    }
+
+    // ── CM Vijay ───────────────────────────────────────────────────────────
+    if (category === 'CM Vijay') {
+      const results = await searchGoogleNews('Tamilnadu CM Vijay', 5);
+      if (results.length >= 5) return results.slice(0, 15);
+      
+      const tamilResults = await searchGoogleNews('தமிழக முதல்வர் விஜய்', 5);
+      return [...results, ...tamilResults].slice(0, 15);
     }
 
     // ── Local ──────────────────────────────────────────────────────────────

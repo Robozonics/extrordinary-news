@@ -12,7 +12,7 @@ interface Props {
   onArticlesUpdate?: (articles: LiveArticle[]) => void;
 }
 
-const CATEGORIES = ['World', 'Leaders', 'Local', 'Blind Spot', 'Tech', 'America', 'Europe', 'Sports'] as const;
+const CATEGORIES = ['World', 'Leaders', 'Local', 'Blind Spot', 'Tech', 'America', 'Europe', 'Sports', 'CM Vijay'] as const;
 type Category = typeof CATEGORIES[number];
 
 export default function CyberMode({ view, setMode, onArticlesUpdate }: Props) {

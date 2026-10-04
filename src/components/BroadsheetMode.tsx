@@ -42,7 +42,7 @@ export default function BroadsheetMode() {
     touchStartY.current = null;
   };
 
-  const pageOrder = ['Front Page', 'Global Leaders', 'National News', 'Local News', 'World News', 'Technology', 'Sports'];
+  const pageOrder = ['Front Page', 'Global Leaders', 'CM Vijay', 'National News', 'Local News', 'World News', 'Technology', 'Sports'];
 
   const loadPaper = async () => {
     setLoading(true);
@@ -60,18 +60,20 @@ export default function BroadsheetMode() {
       }
     }
 
-    const [nat, loc, wrld, tech, spt, leaders] = await Promise.all([
+    const [nat, loc, wrld, tech, spt, leaders, vijay] = await Promise.all([
       fetchLiveNews("India"),
       fetchLiveNews("Local", localQuery),
       fetchLiveNews("World"),
       fetchLiveNews("Tech"),
       fetchLiveNews("Sports"),
-      fetchLiveNews("Leaders")
+      fetchLiveNews("Leaders"),
+      fetchLiveNews("CM Vijay")
     ]);
 
     setPages({
-      'Front Page': [nat[0], leaders[0], wrld[0], loc[0], tech[0], spt[0]].filter(Boolean),
+      'Front Page': [vijay[0], nat[0], leaders[0], wrld[0], loc[0], tech[0], spt[0]].filter(Boolean),
       'Global Leaders': leaders.slice(1),
+      'CM Vijay': vijay.slice(1),
       'National News': nat.slice(1),
       'Local News': loc.slice(1),
       'World News': wrld.slice(1),
