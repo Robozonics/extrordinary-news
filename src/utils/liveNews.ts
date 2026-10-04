@@ -191,7 +191,10 @@ async function fetchViaProxy(
     const res = await fetch(proxyUrl, { signal: ctrl.signal });
     clearTimeout(timer);
     sharedSignal.removeEventListener('abort', onSharedAbort);
-    if (!res.ok) throw new Error(`${res.status}`);
+    if (!res.ok) {
+      console.warn(`[Proxy Fail] ${proxyUrl} returned ${res.status}`);
+      throw new Error(`${res.status}`);
+    }
     
     let xmlText: string;
     if (isJson) {
@@ -206,6 +209,7 @@ async function fetchViaProxy(
     return articles;
   } catch (e) {
     clearTimeout(timer);
+    console.warn(`[Proxy Caught Error] ${proxyUrl}:`, e);
     throw e;
   }
 }
