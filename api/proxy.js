@@ -16,6 +16,7 @@ export default async function handler(req, res) {
     const text = await response.text();
     
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
     res.setHeader('Content-Type', response.headers.get('content-type') || 'application/xml');
     res.status(response.status).send(text);
   } catch (error) {
