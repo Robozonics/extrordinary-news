@@ -15,27 +15,33 @@ async function fetchTickerHeadlines(): Promise<string[]> {
 
   await Promise.all(
     RSS_URLS.map(async (rssUrl) => {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(
-          `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
-          { signal: controller.signal }
-        );
-        clearTimeout(timer);
-        const data = await res.json();
-        if (data.status === 'ok') {
-          data.items
-            .filter((item: any) => {
-              if (!item.title) return false;
-              const pub = new Date(item.pubDate).getTime();
-              return isNaN(pub) || now - pub <= ONE_WEEK_MS;
-            })
-            .slice(0, 5) // up to 5 headlines per feed
-            .forEach((item: any) => results.push(item.title.toUpperCase()));
+      const urls = [
+        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
+        `https://feed2json.org/convert?url=${encodeURIComponent(rssUrl)}`
+      ];
+      for (const url of urls) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 8000);
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timer);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data.status === 'ok' || data.items) {
+            const items = data.items || [];
+            items
+              .filter((item: any) => {
+                if (!item.title) return false;
+                const pub = new Date(item.pubDate || item.date_published).getTime();
+                return isNaN(pub) || now - pub <= ONE_WEEK_MS;
+              })
+              .slice(0, 5)
+              .forEach((item: any) => results.push(item.title.toUpperCase()));
+            break;
+          }
+        } catch {
+          // try next url
         }
-      } catch {
-        // silently skip timed-out or failed feeds
       }
     })
   );
