@@ -152,42 +152,15 @@ function parseXmlFeed(xmlText: string, labelCategory: string, maxDays: number): 
       const thumb = el.getElementsByTagName('media:thumbnail')[0];
       if (thumb) rawImg = thumb.getAttribute('url') || '';
     }
-    if (!rawImg) {
-      // Use category-specific high-quality Unsplash images instead of random inaccurate Picsum photos
-      const DEFAULT_IMAGES: Record<string, string> = {
-        'Technology': 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80',
-        'Business': 'https://images.unsplash.com/photo-1444653614773-995cb1ef9efa?w=800&q=80',
-        'Finance': 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&q=80',
-        'Politics': 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=800&q=80',
-        'India': 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=800&q=80',
-        'Sports': 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&q=80',
-        'World': 'https://images.unsplash.com/photo-1521295121783-8a321d551ad2?w=800&q=80',
-        'Entertainment': 'https://images.unsplash.com/photo-1603190287605-e6ade3cb4a00?w=800&q=80',
-        'Health': 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=800&q=80',
-        'Science': 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800&q=80',
-      };
-      // For Local news, use a city-like image
-      let fallback = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&q=80'; // Default Newspaper
-      if (labelCategory.includes('Local')) fallback = 'https://images.unsplash.com/photo-1444723121867-7a241cacace9?w=800&q=80';
-      
-      for (const [cat, img] of Object.entries(DEFAULT_IMAGES)) {
-        if (labelCategory.includes(cat) || labelCategory.toLowerCase().includes(cat.toLowerCase())) {
-          fallback = img;
-          break;
-        }
-      }
-      
-      // For Local news or Search, generate a highly accurate contextual image using AI
-      if (labelCategory === 'Search' || labelCategory === 'Local') {
-         // Create a prompt from the title (first 10 words)
-         const promptWords = title.replace(/[^a-zA-Z0-9 ]/g, '').split(' ').slice(0, 8).join(' ');
-         fallback = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptWords + ' news high quality photography')}?width=800&height=500&nologo=true`;
-      }
-      
-      rawImg = fallback;
+    if (!rawImg && link) {
+      // Fetch the TRUE real image from the actual article source using our Vercel proxy.
+      // If the source lacks an image, the proxy will intelligently fallback to generating a unique AI image based on the title!
+      rawImg = `/api/image?url=${encodeURIComponent(link)}&title=${encodeURIComponent(title)}`;
     }
 
-    const optimizedImg = rawImg.includes('pollinations.ai') || rawImg.includes('unsplash.com') ? rawImg : `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
+    const optimizedImg = rawImg.includes('/api/image') || rawImg.includes('pollinations.ai') || rawImg.includes('unsplash.com') 
+      ? rawImg 
+      : `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
 
     return {
       id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
