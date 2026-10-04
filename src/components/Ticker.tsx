@@ -15,33 +15,14 @@ async function fetchTickerHeadlines(): Promise<string[]> {
 
   await Promise.all(
     RSS_URLS.map(async (rssUrl) => {
-      const urls = [
-        `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`,
-        `https://feed2json.org/convert?url=${encodeURIComponent(rssUrl)}`
-      ];
-      for (const url of urls) {
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 8000);
-          const res = await fetch(url, { signal: controller.signal });
-          clearTimeout(timer);
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (data.status === 'ok' || data.items) {
-            const items = data.items || [];
-            items
-              .filter((item: any) => {
-                if (!item.title) return false;
-                const pub = new Date(item.pubDate || item.date_published).getTime();
-                return isNaN(pub) || now - pub <= ONE_WEEK_MS;
-              })
-              .slice(0, 5)
-              .forEach((item: any) => results.push(item.title.toUpperCase()));
-            break;
-          }
-        } catch {
-          // try next url
-        }
+      try {
+        const { fetchOneFeed } = await import('../utils/liveNews');
+        const articles = await fetchOneFeed(rssUrl, 'Ticker', 7);
+        articles.slice(0, 5).forEach(article => {
+          results.push(article.title.toUpperCase());
+        });
+      } catch (e) {
+        console.warn('Ticker failed for url:', rssUrl);
       }
     })
   );
