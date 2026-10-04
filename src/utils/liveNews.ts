@@ -65,6 +65,18 @@ const BROAD_FEEDS = [
   'https://www.wired.com/feed/rss',
 ];
 
+const TAMIL_FEEDS = [
+  'https://tamil.oneindia.com/rss/tamil-news-fb.xml',
+  'https://tamil.samayam.com/rssfeeds/47344932.cms',
+  'https://www.hindutamil.in/rss/tamilnadu',
+  'https://tamil.news18.com/rss/tamil-nadu.xml',
+  'https://www.dinamalar.com/rss_main.asp',
+  'https://tamil.asianetnews.com/rss/tamilnadu',
+  'https://www.dailythanthi.com/rss',
+  'https://tamil.abplive.com/home/feed',
+  'https://www.polimernews.com/rss'
+];
+
 const LEADER_KEYWORDS = [
   'president', 'prime minister', 'chancellor', 'minister', 'senator',
   'secretary of state', 'summit', 'g7', 'g20', 'nato', 'un ', 'diplomat',
@@ -249,8 +261,8 @@ async function searchGoogleNews(query: string, maxDays: number = 7): Promise<Liv
 }
 
 /** Fetch many feeds in parallel, deduplicate */
-async function fetchFeeds(urls: string[], label: string): Promise<LiveArticle[]> {
-  const results = await Promise.all(urls.map(u => fetchOneFeed(u, label)));
+async function fetchFeeds(urls: string[], label: string, maxDays: number = 7): Promise<LiveArticle[]> {
+  const results = await Promise.all(urls.map(u => fetchOneFeed(u, label, maxDays)));
   const flat = results.flat();
   const seen = new Set<string>();
   return flat.filter(a => {
@@ -371,11 +383,23 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
 
     // ── CM Vijay ───────────────────────────────────────────────────────────
     if (category === 'CM Vijay') {
-      const results = await searchGoogleNews('Tamilnadu CM Vijay', 5);
-      if (results.length >= 5) return results.slice(0, 15);
+      const gnewsResults = await searchGoogleNews('Tamilnadu CM Vijay', 5);
       
-      const tamilResults = await searchGoogleNews('தமிழக முதல்வர் விஜய்', 5);
-      return [...results, ...tamilResults].slice(0, 15);
+      const tamilAll = await fetchFeeds(TAMIL_FEEDS, 'Tamil News', 5);
+      const keywords = ['விஜய்', 'vijay', 'tvk', 'தமிழக', 'முதல்வர்'];
+      const tamilFiltered = tamilAll.filter(a => {
+        const text = (a.title + ' ' + a.summary).toLowerCase();
+        return keywords.some(k => text.includes(k));
+      });
+
+      const combined = [...gnewsResults, ...tamilFiltered];
+      
+      if (combined.length < 3) {
+         const tamilGNews = await searchGoogleNews('தமிழக முதல்வர் விஜய்', 5);
+         return shuffle([...combined, ...tamilGNews]).slice(0, 15);
+      }
+      
+      return shuffle(combined).slice(0, 15);
     }
 
     // ── Local ──────────────────────────────────────────────────────────────
