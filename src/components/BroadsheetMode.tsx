@@ -70,15 +70,30 @@ export default function BroadsheetMode() {
       fetchLiveNews("CM Vijay")
     ]);
 
+    const getTodayTop = (articles: LiveArticle[]) => {
+      return articles.find(a => {
+        const pub = new Date(a.pubDate).getTime();
+        return !isNaN(pub) && Date.now() - pub <= 24 * 60 * 60 * 1000;
+      });
+    };
+
+    const fpVijay = getTodayTop(vijay);
+    const fpNat = getTodayTop(nat);
+    const fpLeaders = getTodayTop(leaders);
+    const fpWrld = getTodayTop(wrld);
+    const fpLoc = getTodayTop(loc);
+    const fpTech = getTodayTop(tech);
+    const fpSpt = getTodayTop(spt);
+
     setPages({
-      'Front Page': [vijay[0], nat[0], leaders[0], wrld[0], loc[0], tech[0], spt[0]].filter(Boolean),
-      'Global Leaders': leaders.slice(1),
-      'CM Vijay': vijay.slice(1),
-      'National News': nat.slice(1),
-      'Local News': loc.slice(1),
-      'World News': wrld.slice(1),
-      'Technology': tech.slice(1),
-      'Sports': spt.slice(1)
+      'Front Page': [fpVijay, fpNat, fpLeaders, fpWrld, fpLoc, fpTech, fpSpt].filter(Boolean) as LiveArticle[],
+      'Global Leaders': leaders.filter(a => a !== fpLeaders),
+      'CM Vijay': vijay.filter(a => a !== fpVijay),
+      'National News': nat.filter(a => a !== fpNat),
+      'Local News': loc.filter(a => a !== fpLoc),
+      'World News': wrld.filter(a => a !== fpWrld),
+      'Technology': tech.filter(a => a !== fpTech),
+      'Sports': spt.filter(a => a !== fpSpt)
     });
     
     setLoading(false);
