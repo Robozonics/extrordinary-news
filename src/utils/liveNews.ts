@@ -34,7 +34,9 @@ const CATEGORY_FEEDS: Record<string, string[]> = {
   Sports: [
     'http://feeds.bbci.co.uk/sport/rss.xml',
     'https://www.espn.com/espn/rss/news',
-    'https://www.cbssports.com/rss/headlines/',
+    'https://timesofindia.indiatimes.com/rssfeeds/4719148.cms',
+    'https://sports.yahoo.com/rss/',
+    'https://www.thehindu.com/sport/feeder/default.rss',
     'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
   ],
   Tech: [
@@ -525,7 +527,17 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
       return shuffle(articles);
     }
 
-    // ── Standard RSS categories (World, America, Europe, Sports, Tech) ────
+    // ── Sports ─────────────────────────────────────────────────────────────
+    if (category === 'Sports') {
+      const sportsUrls = CATEGORY_FEEDS['Sports'];
+      const [sportsRss, gnews] = await Promise.all([
+        fetchFeeds(sportsUrls, 'Sports'),
+        searchGoogleNews('Global sports news cricket soccer tennis basketball').catch(() => [] as LiveArticle[])
+      ]);
+      return shuffle([...sportsRss, ...gnews]);
+    }
+
+    // ── Standard RSS categories (World, America, Europe, Tech) ────────────
     const urls = CATEGORY_FEEDS[category] || CATEGORY_FEEDS['World'];
     const articles = await fetchFeeds(urls, category);
     return shuffle(articles);
