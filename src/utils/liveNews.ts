@@ -409,7 +409,8 @@ export async function fetchLiveNews(category: string, query?: string): Promise<L
 
       console.warn(`⚠️ Search returned 0 results for "${query}", using category fallbacks...`);
       
-      const kw = query.toLowerCase().split(' ').filter(w => w.length > 2);
+      const ignoreWords = ['news', 'today', 'latest', 'live', 'update'];
+      const kw = query.toLowerCase().split(' ').filter(w => w.length > 2 && !ignoreWords.includes(w));
 
       // 2. If it was a Local search, fallback to India feeds first
       if (category === 'Local') {
