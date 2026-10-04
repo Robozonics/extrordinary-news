@@ -18,7 +18,7 @@ async function fetchTickerHeadlines(): Promise<string[]> {
       try {
         const { fetchOneFeed } = await import('../utils/liveNews');
         const articles = await fetchOneFeed(rssUrl, 'Ticker', 7);
-        articles.slice(0, 5).forEach(article => {
+        articles.slice(0, 5).forEach((article: any) => {
           results.push(article.title.toUpperCase());
         });
       } catch (e) {

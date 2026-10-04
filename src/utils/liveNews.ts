@@ -248,7 +248,7 @@ async function fetchViaProxy(
 // ---------------------------------------------------------------------------
 // Core RSS fetcher — races ALL proxies in parallel for maximum speed
 // ---------------------------------------------------------------------------
-async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: number = 7): Promise<LiveArticle[]> {
+export async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: number = 7): Promise<LiveArticle[]> {
   // Check cache first
   const cacheKey = `${rssUrl}|${maxDays}`;
   const cached = feedCache.get(cacheKey);

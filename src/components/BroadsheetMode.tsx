@@ -70,7 +70,7 @@ export default function BroadsheetMode() {
 
       const getTodayTop = (articles: LiveArticle[]) => {
         return articles.find(a => {
-          const pub = new Date(a.timestamp || a.pubDate).getTime();
+          const pub = new Date(a.pubDate).getTime();
           return !isNaN(pub) && Date.now() - pub <= 24 * 60 * 60 * 1000;
         });
       };
