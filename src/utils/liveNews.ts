@@ -176,10 +176,18 @@ function parseXmlFeed(xmlText: string, labelCategory: string, maxDays: number): 
           break;
         }
       }
+      
+      // For Local news or Search, generate a highly accurate contextual image using AI
+      if (labelCategory === 'Search' || labelCategory === 'Local') {
+         // Create a prompt from the title (first 10 words)
+         const promptWords = title.replace(/[^a-zA-Z0-9 ]/g, '').split(' ').slice(0, 8).join(' ');
+         fallback = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptWords + ' news high quality photography')}?width=800&height=500&nologo=true`;
+      }
+      
       rawImg = fallback;
     }
 
-    const optimizedImg = rawImg.includes('unsplash.com') ? rawImg : `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
+    const optimizedImg = rawImg.includes('pollinations.ai') || rawImg.includes('unsplash.com') ? rawImg : `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}&w=800&output=webp&q=80&fit=cover`;
 
     return {
       id: `${Math.random().toString(36).substr(2, 9)}-${idx}`,
