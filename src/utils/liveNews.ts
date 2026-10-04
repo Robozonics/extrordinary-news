@@ -226,7 +226,12 @@ async function fetchOneFeed(rssUrl: string, labelCategory: string, maxDays: numb
 
   // Build all proxy attempts
   const attempts: Promise<LiveArticle[]>[] = [
-    // rss2json (JSON API)
+    // 1. OUR OWN VERCEL PROXY (Fastest, no 429 rate limits, no CORS block)
+    fetchViaProxy(
+      `/api/proxy?url=${encodeURIComponent(rssUrl)}`,
+      false, labelCategory, maxDays, raceCtrl.signal
+    ),
+    // 2. rss2json (JSON API)
     (async () => {
       const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
       const ctrl = new AbortController();
